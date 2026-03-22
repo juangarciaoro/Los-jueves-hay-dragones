@@ -343,10 +343,6 @@ select.form-input{
   </div>
   <div class="header-right">
     <div class="user-badge" id="user-badge">—</div>
-    <button class="btn btn-outline btn-sm dm-only-ctrl" id="btn-export" onclick="exportData()">⬇ Exportar</button>
-    <label class="btn btn-outline btn-sm dm-only-ctrl" id="btn-import" style="cursor:pointer">
-      ⬆ Importar<input type="file" accept=".json" style="display:none" onchange="importData(event)">
-    </label>
     <button class="btn btn-outline btn-sm" onclick="doLogout()">Salir</button>
   </div>
 </header>
@@ -365,6 +361,7 @@ select.form-input{
       <button class="maint-tab active" onclick="switchMaintTab('personajes',this)">Personajes</button>
       <button class="maint-tab" id="tab-maint-enemigos" onclick="switchMaintTab('enemigos',this)">Tipos de Enemigos</button>
       <button class="maint-tab dm-only-ctrl" id="tab-maint-usuarios" onclick="switchMaintTab('usuarios',this)">Usuarios</button>
+      <button class="maint-tab dm-only-ctrl" id="tab-maint-backup" onclick="switchMaintTab('backup',this)">Copia de Seguridad</button>
     </div>
     <div id="maint-personajes" class="maint-section active">
       <div id="pj-list" class="entity-list"></div>
@@ -382,6 +379,24 @@ select.form-input{
     <div id="maint-usuarios" class="maint-section">
       <div id="user-list" class="entity-list"></div>
       <button class="btn btn-gold" onclick="openUserModal()">+ Añadir Usuario</button>
+    </div>
+    <div id="maint-backup" class="maint-section">
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:480px">
+        <p style="font-family:'Crimson Text',serif;font-size:1rem;color:var(--ink-faded);line-height:1.6">
+          Exporta todos los datos de la campaña a un archivo JSON como copia de seguridad,
+          o importa un archivo previamente exportado para restaurar el estado.
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-gold" onclick="exportData()">⬇ Exportar copia de seguridad</button>
+          <label class="btn btn-outline" style="cursor:pointer">
+            ⬆ Importar copia de seguridad
+            <input type="file" accept=".json" style="display:none" onchange="importData(event)">
+          </label>
+        </div>
+        <p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:1px;color:var(--blood);text-transform:uppercase">
+          ⚠ Importar sobreescribe todos los datos actuales en Firestore
+        </p>
+      </div>
     </div>
   </div>
 
