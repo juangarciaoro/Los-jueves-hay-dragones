@@ -753,6 +753,7 @@ function doLogin() {
   errEl.textContent = '';
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('login-pass').value = '';
+  sessionStorage.setItem('ljhd_user', user.id);
   startRealtimeSync();
   applyRoleUI();
   rebuildSessionTabs();
@@ -764,6 +765,7 @@ function doLogin() {
 
 function doLogout() {
   if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
+  sessionStorage.removeItem('ljhd_user');
   currentUser = null;
   document.getElementById('session-tabs-container').innerHTML = '';
   document.querySelectorAll('#main-content .view:not(#view-maint)').forEach(v => v.remove());
@@ -1486,6 +1488,22 @@ function showLoadingOverlay(show) {
 // ===========================
 (async () => {
   await loadState();
+  // Restore session after page refresh
+  const savedId = sessionStorage.getItem('ljhd_user');
+  if (savedId) {
+    const user = state.users.find(u => u.id === savedId);
+    if (user) {
+      currentUser = user;
+      startRealtimeSync();
+      applyRoleUI();
+      rebuildSessionTabs();
+      renderCharList();
+      renderEnemyList();
+      renderUserList();
+      switchView('maint');
+      document.getElementById('login-screen').classList.add('hidden');
+    }
+  }
 })();
 
 // ===========================
