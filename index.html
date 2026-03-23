@@ -309,6 +309,187 @@ select.form-input{
 .role-player{color:var(--parchment-deep)!important;}
 .dm-only-ctrl{} /* visible to DM */
 .player-hide{display:none!important;} /* hidden for player */
+
+/* ===== RESPONSIVE ===== */
+
+/* Tablet: <= 900px */
+@media (max-width: 900px) {
+  #app-header { padding: 10px 16px 8px; }
+  #app-header h1 { font-size: 1.4rem; }
+  #app-header .sub { display: none; }
+  .user-badge { font-size: .58rem; padding: 3px 8px; }
+
+  #main-content { padding: 14px 16px; }
+
+  .session-grid { grid-template-columns: 1fr; }
+
+  .char-form-grid { grid-template-columns: 1fr 1fr; }
+  .char-form-grid .span2 { grid-column: span 2; }
+  .char-form-grid .span3 { grid-column: span 2; }
+
+  .attr-grid { grid-template-columns: repeat(5, 1fr); }
+
+  .skills-grid { grid-template-columns: 1fr; }
+
+  .combatant-card {
+    grid-template-columns: 28px 1fr auto auto;
+    grid-template-rows: auto auto;
+  }
+  .hp-bar-wrap { grid-column: 2; }
+  .hp-actions { grid-column: 3; }
+  .conditions-wrap { grid-column: 1 / -1; }
+
+  .maint-tabs { flex-wrap: wrap; gap: 4px; }
+  .maint-tab { padding: 6px 12px; font-size: .62rem; }
+
+  .modal { width: 98%; }
+}
+
+/* Mobile: <= 600px */
+@media (max-width: 600px) {
+  #app-header { padding: 8px 12px; gap: 8px; }
+  #app-header h1 { font-size: 1.15rem; letter-spacing: 1px; }
+  .user-badge { display: none; }
+  .btn.btn-outline.btn-sm { font-size: .58rem; padding: 4px 8px; }
+
+  #tabs-bar { padding: 0 8px; }
+  .tab-btn { font-size: .62rem; padding: 8px 10px 6px; letter-spacing: 0; }
+  #tab-add-btn { padding: 8px 10px; }
+
+  #main-content { padding: 10px 10px; }
+
+  .panel-header { font-size: .65rem; letter-spacing: 2px; padding: 8px 12px; }
+  .panel-body { padding: 12px; }
+
+  /* Session panels stack */
+  .session-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  /* Dice: stack buttons */
+  .dice-controls { gap: 8px; }
+  .dice-btn { padding: 10px 14px; font-size: .85rem; flex: 1; }
+  .dice-result-display { font-size: 1.8rem; min-height: 50px; }
+  .result-total { font-size: 2.2rem; }
+
+  /* Initiative: compact card layout */
+  .combatant-card {
+    grid-template-columns: 26px 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 5px;
+    padding: 8px;
+  }
+  .c-init { grid-row: 1; grid-column: 1; font-size: .9rem; }
+  .c-name { grid-row: 1; grid-column: 2; }
+  .hp-bar-wrap { grid-row: 2; grid-column: 1 / -1; }
+  .hp-actions { grid-row: 2; grid-column: 2; justify-content: flex-end; display: flex; }
+  .hp-btn { width: 30px; height: 30px; font-size: .8rem; }
+  .conditions-wrap { grid-row: 3; grid-column: 1 / -1; }
+  /* Stack hp bar and actions side by side on row 2 */
+  .combatant-card { position: relative; }
+
+  /* Simpler 2-col layout for combatant on mobile */
+  .combatant-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .c-init { width: 28px; flex-shrink: 0; text-align: center; }
+  .c-name { flex: 1; min-width: 80px; }
+  .hp-bar-wrap { width: 100%; order: 3; }
+  .hp-actions { order: 2; margin-left: auto; }
+  .conditions-wrap { width: 100%; order: 4; grid-column: unset; }
+  .dead-btn-wrap { order: 2; }
+
+  /* Add combatant form: full width fields */
+  .add-combatant-form { flex-direction: column; gap: 10px; }
+  .add-combatant-form .form-group { width: 100%; }
+  .form-input-sm, .form-input-md { width: 100%; }
+
+  /* Char form: single column */
+  .char-form-grid { grid-template-columns: 1fr; }
+  .char-form-grid .span2,
+  .char-form-grid .span3 { grid-column: span 1; }
+
+  /* Attributes: wrap to 3 cols */
+  .attr-grid { grid-template-columns: repeat(3, 1fr); }
+
+  /* Skills: single column */
+  .skills-grid { grid-template-columns: 1fr; }
+
+  /* Entity cards: stack on mobile */
+  .entity-card { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .entity-actions { width: 100%; justify-content: flex-end; }
+
+  /* Maintenance tabs: scrollable row */
+  .maint-tabs { flex-wrap: nowrap; overflow-x: auto; gap: 0;
+    scrollbar-width: none; padding-bottom: 0; }
+  .maint-tabs::-webkit-scrollbar { display: none; }
+  .maint-tab { white-space: nowrap; padding: 8px 14px; font-size: .6rem; flex-shrink: 0; }
+
+  /* Modal: full screen on mobile */
+  .modal-overlay { align-items: flex-end; }
+  .modal {
+    width: 100%;
+    max-width: 100% !important;
+    max-height: 92vh;
+    border-radius: 8px 8px 0 0;
+    border-bottom: none;
+  }
+  .modal-body { padding: 14px; }
+  .modal-footer { padding: 10px 14px; }
+
+  /* Login box: full width */
+  .login-box { width: 94vw; }
+  .login-crest h1 { font-size: 1.5rem; }
+  .login-body { padding: 18px; }
+
+  /* Init controls: wrap */
+  .init-controls { gap: 6px; }
+  .init-round { margin-left: 0; width: 100%; text-align: center; }
+
+  /* Buttons: larger tap targets */
+  .btn { padding: 9px 14px; }
+  .btn-sm { padding: 7px 12px; font-size: .65rem; }
+
+  /* Hab rows */
+  .hab-row { flex-direction: column; }
+  .hab-row .form-input { width: 100%; }
+}
+
+/* Very small: <= 380px */
+@media (max-width: 380px) {
+  #app-header h1 { font-size: 1rem; }
+  .tab-btn { font-size: .58rem; padding: 7px 8px 5px; }
+  .attr-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .attr-box input { width: 40px; font-size: .9rem; }
+}
+
+/* ===== PREVIEW TOGGLE ===== */
+.preview-toggle {
+  display:flex;align-items:center;gap:6px;
+  font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:1px;text-transform:uppercase;
+  color:var(--parchment-deep);cursor:pointer;user-select:none;
+  border:1px solid var(--border);padding:4px 10px;border-radius:2px;
+  background:rgba(180,130,0,.08);transition:background .15s;
+}
+.preview-toggle:hover{background:rgba(180,130,0,.18);}
+.preview-toggle.active{background:rgba(122,26,26,.2);border-color:var(--blood);color:var(--blood-light);}
+.preview-toggle .tog-dot{
+  width:10px;height:10px;border-radius:50%;background:var(--border);
+  transition:background .2s;flex-shrink:0;
+}
+.preview-toggle.active .tog-dot{background:var(--blood-light);}
+
+/* ===== PLAYER NOTES ===== */
+.player-notes-panel { display:flex;flex-direction:column;gap:10px; }
+
+/* ===== INIT INLINE EDIT ===== */
+.c-init-input {
+  width:36px;text-align:center;font-family:'Cinzel',serif;font-size:.9rem;font-weight:700;
+  color:var(--gold);background:transparent;border:none;border-bottom:1px solid var(--gold);
+  outline:none;padding:0 2px;
+}
+.c-init-input:focus{background:rgba(180,130,0,.1);}
 </style>
 </head>
 <body>
@@ -343,12 +524,16 @@ select.form-input{
   </div>
   <div class="header-right">
     <div class="user-badge" id="user-badge">—</div>
+    <button class="preview-toggle dm-only-ctrl" id="preview-toggle" onclick="togglePlayerPreview()" title="Ver como jugador">
+      <span class="tog-dot"></span><span id="preview-label">Vista jugador</span>
+    </button>
     <button class="btn btn-outline btn-sm" onclick="doLogout()">Salir</button>
   </div>
 </header>
 
 <div id="tabs-bar">
   <button class="tab-btn tab-special active" data-view="maint" id="tab-maint" onclick="switchView('maint')">⚙ Mantenimiento</button>
+  <button class="tab-btn tab-special" id="tab-charsheet" style="display:none" onclick="switchView('charsheet')">📜 Hoja de Personaje</button>
   <div id="session-tabs-container"></div>
   <button id="tab-add-btn" class="dm-only-ctrl" title="Nueva sesión" onclick="openNewSessionModal()">＋</button>
 </div>
@@ -400,6 +585,11 @@ select.form-input{
     </div>
   </div>
 
+  <!-- CHARSHEET VIEW (players only) -->
+  <div id="view-charsheet" class="view">
+    <div id="charsheet-content"></div>
+  </div>
+
 </div>
 
 <!-- ===== SESSION VIEW TEMPLATE ===== -->
@@ -421,6 +611,13 @@ select.form-input{
         <div class="ornament">✦ ✦ ✦</div>
         <label class="flabel">Notas Rápidas</label>
         <textarea class="note-area" style="min-height:60px" placeholder="Apuntes al vuelo…" data-field="quick_notes"></textarea>
+      </div>
+    </div>
+    <!-- NOTAS JUGADOR (solo jugadores) -->
+    <div class="panel player-notes-panel-wrap" style="display:none">
+      <div class="panel-header">📝 Mi Cuaderno</div>
+      <div class="panel-body player-notes-panel">
+        <textarea class="note-area" style="min-height:200px" placeholder="Tus notas personales… solo tú las ves." data-field="player_note"></textarea>
       </div>
     </div>
     <!-- DADOS -->
@@ -448,6 +645,7 @@ select.form-input{
         <div class="init-controls">
           <button class="btn btn-gold btn-sm next-turn-btn dm-only-ctrl">► Siguiente turno</button>
           <button class="btn btn-outline btn-sm reset-combat-btn dm-only-ctrl">↺ Reiniciar</button>
+          <button class="btn btn-outline btn-sm sort-init-btn dm-only-ctrl" title="Ordenar por iniciativa">⇅ Ordenar</button>
           <div class="init-round">Ronda <span class="round-num">1</span></div>
         </div>
         <div class="combatant-list"></div>
@@ -686,6 +884,7 @@ let currentUser  = null;
 let _saveTimeout = null;
 let _unsubscribe = null;
 let _ignoreNext  = false;
+let _playerPreview = false; // DM preview mode as player
 
 // ===========================
 //  PERSIST (Firestore)
@@ -736,6 +935,15 @@ function startRealtimeSync() {
     renderEnemyList();
     if (isDM()) renderUserList();
     applyRoleUI();
+    // Re-render charsheet: if currently visible OR if player (charsheet is their home)
+    const activeView = document.querySelector('.view.active');
+    const onCharsheet = activeView && activeView.id === 'view-charsheet';
+    if (onCharsheet || (!isDM() && currentUser?.charId)) {
+      const csChar = currentUser?.charId ? state.chars.find(c => c.id === currentUser.charId) : null;
+      if (onCharsheet || csChar) renderCharSheetView(csChar);
+    }
+  }, err => {
+    console.error('Firestore onSnapshot error:', err);
   });
 }
 
@@ -750,7 +958,8 @@ function hashPassword(pw) {
 //  HELPERS
 // ===========================
 function uid() { return Math.random().toString(36).slice(2,10); }
-function isDM() { return currentUser && currentUser.isDM; }
+function isDM() { return currentUser && currentUser.isDM && !_playerPreview; }
+function isRealDM() { return currentUser && currentUser.isDM; }
 function getSession(id) { return state.sessions.find(s => s.id === id); }
 
 // ===========================
@@ -769,13 +978,14 @@ function doLogin() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('login-pass').value = '';
   sessionStorage.setItem('ljhd_user', user.id);
-  startRealtimeSync();
   applyRoleUI();
   rebuildSessionTabs();
   renderCharList();
   renderEnemyList();
   renderUserList();
-  switchView('maint');
+  console.log('[login] about to switchView. isDM:', currentUser.isDM, 'charId:', currentUser.charId, 'chars in state:', state.chars.length);
+  switchView(currentUser.isDM ? 'maint' : 'charsheet');
+  startRealtimeSync(); // start AFTER view is rendered
 }
 
 function doLogout() {
@@ -792,36 +1002,48 @@ function doLogout() {
 
 function applyRoleUI() {
   const dm = isDM();
+  const realDM = isRealDM();
   // Badge
   const badge = document.getElementById('user-badge');
-  badge.innerHTML = dm
-    ? `<span class="role-dm">⚔ DM</span> &nbsp;${currentUser.username}`
+  badge.innerHTML = realDM
+    ? (_playerPreview
+        ? `<span class="role-player">👁 Vista Jugador</span>`
+        : `<span class="role-dm">⚔ DM</span> &nbsp;${currentUser.username}`)
     : `${currentUser.username} &nbsp;<span class="role-player">Jugador</span>`;
-  // DM-only controls visibility
-  document.querySelectorAll('.dm-only-ctrl').forEach(el => {
-    el.style.display = dm ? '' : 'none';
-  });
-  // Maintenance tab visibility
-  document.getElementById('tab-maint').style.display = '';
-  // Players only see Personajes and Enemigos tabs (not Usuarios)
-  // tab-maint-usuarios already hidden via dm-only-ctrl
-  // Player char panel
-  if (!dm) {
-    const myChar = currentUser.charId ? state.chars.find(c => c.id === currentUser.charId) : null;
-    const panel = document.getElementById('player-char-panel');
-    const addBtn = document.getElementById('btn-add-char');
-    if (myChar) {
-      panel.style.display = 'block';
-      renderPlayerCharPanel(myChar);
-      if (addBtn) addBtn.style.display = 'none';
-    } else {
-      panel.style.display = 'none';
-    }
-  } else {
-    document.getElementById('player-char-panel').style.display = 'none';
-    const addBtn = document.getElementById('btn-add-char');
-    if (addBtn) addBtn.style.display = '';
-  }
+
+  // DM-only controls
+  document.querySelectorAll('.dm-only-ctrl').forEach(el => { el.style.display = dm ? '' : 'none'; });
+
+  // Tabs: maintenance only for DM, charsheet only for players
+  document.getElementById('tab-maint').style.display = dm ? '' : 'none';
+  document.getElementById('tab-charsheet').style.display = !dm ? '' : 'none';
+
+  // Preview toggle: only real DMs
+  const togBtn = document.getElementById('preview-toggle');
+  if (togBtn) togBtn.style.display = realDM ? '' : 'none';
+
+  // Hide legacy player-char-panel (no longer used)
+  const panel = document.getElementById('player-char-panel');
+  if (panel) panel.style.display = 'none';
+}
+
+// ===========================
+//  PLAYER PREVIEW TOGGLE
+// ===========================
+function togglePlayerPreview() {
+  if (!isRealDM()) return;
+  _playerPreview = !_playerPreview;
+  const btn = document.getElementById('preview-toggle');
+  const lbl = document.getElementById('preview-label');
+  btn.classList.toggle('active', _playerPreview);
+  lbl.textContent = _playerPreview ? 'Vista DM' : 'Vista jugador';
+  // Rebuild everything with new role
+  rebuildSessionTabs();
+  renderCharList();
+  renderEnemyList();
+  applyRoleUI();
+  // Navigate to appropriate default tab
+  switchView(_playerPreview ? 'charsheet' : 'maint');
 }
 
 // ===========================
@@ -834,6 +1056,18 @@ function switchView(viewId) {
   document.querySelectorAll('#tabs-bar .tab-btn').forEach(b => b.classList.remove('active'));
   if (viewId === 'maint') {
     document.getElementById('tab-maint').classList.add('active');
+  } else if (viewId === 'charsheet') {
+    const t = document.getElementById('tab-charsheet');
+    if (t) t.classList.add('active');
+    console.log('[charsheet] switchView called. currentUser:', currentUser, 'state.chars:', state.chars.length);
+    let csChar = null;
+    if (currentUser && currentUser.charId) {
+      csChar = state.chars.find(c => c.id === currentUser.charId) || null;
+      console.log('[charsheet] charId=' + currentUser.charId + ' → found:', csChar ? csChar.name : 'NULL');
+    } else {
+      console.log('[charsheet] no charId on currentUser');
+    }
+    renderCharSheetView(csChar);
   } else {
     const t = document.querySelector(`.tab-btn[data-session="${viewId}"]`);
     if (t) t.classList.add('active');
@@ -920,6 +1154,21 @@ function buildSessionView(session) {
   // DM-only sections
   if (!dm) {
     clone.querySelectorAll('.dm-only-ctrl').forEach(el => el.style.display = 'none');
+    // Show player notes panel
+    const pnw = clone.querySelector('.player-notes-panel-wrap');
+    if (pnw) pnw.style.display = '';
+    // Bind player notes (per-user, per-session key)
+    const pnArea = clone.querySelector('[data-field="player_note"]');
+    if (pnArea && currentUser) {
+      const noteKey = `pnote_${session.id}_${currentUser.id}`;
+      if (!session.playerNotes) session.playerNotes = {};
+      pnArea.value = session.playerNotes[currentUser.id] || '';
+      pnArea.addEventListener('input', () => {
+        if (!session.playerNotes) session.playerNotes = {};
+        session.playerNotes[currentUser.id] = pnArea.value;
+        saveState();
+      });
+    }
   }
 
   // Dice
@@ -962,6 +1211,12 @@ function buildSessionView(session) {
     clone.querySelector('.reset-combat-btn').addEventListener('click', () => {
       session.activeTurn = 0; session.round = 1;
       clone.querySelector('.round-num').textContent = 1;
+      saveState();
+      renderCombatantList(session, clone);
+    });
+    clone.querySelector('.sort-init-btn').addEventListener('click', () => {
+      session.combatants.sort((a,b) => b.init - a.init);
+      session.activeTurn = 0;
       saveState();
       renderCombatantList(session, clone);
     });
@@ -1037,13 +1292,18 @@ function renderCombatantList(session, clone) {
     const barClass = pct > 60 ? 'ok' : pct > 25 ? 'low' : '';
     const card = document.createElement('div');
     card.className = 'combatant-card' + (isActive?' active-turn':'') + (c.dead?' dead':'');
+    // Players: see HP of PJs but NOT enemies
+    const showHp = dm || c.type === 'pj';
+    const hpHtml = showHp
+      ? `<div class="hp-bar-wrap">
+          <div class="hp-bar-track"><div class="hp-bar-fill ${barClass}" style="width:${pct}%"></div></div>
+          <div class="hp-text">${c.hp} / ${c.maxHp}</div>
+        </div>`
+      : `<div class="hp-bar-wrap"><div class="hp-text" style="font-style:italic;opacity:.5">—</div></div>`;
     card.innerHTML = `
-      <div class="c-init">${c.init}</div>
+      <div class="c-init-wrap">${dm ? `<input class="c-init-input" type="number" value="${c.init}" min="1" max="99" title="Editar iniciativa">` : `<div class="c-init">${c.init}</div>`}</div>
       <div class="c-name">${c.name}<span class="c-type">${c.type==='pj'?'Personaje':c.type==='enemy'?'Enemigo':''}</span></div>
-      <div class="hp-bar-wrap">
-        <div class="hp-bar-track"><div class="hp-bar-fill ${barClass}" style="width:${pct}%"></div></div>
-        <div class="hp-text">${c.hp} / ${c.maxHp}</div>
-      </div>
+      ${hpHtml}
       <div class="hp-actions ${dm?'':'player-hide'}">
         <button class="hp-btn dmg" title="Daño">−</button>
         <button class="hp-btn" title="Editar">✎</button>
@@ -1070,6 +1330,13 @@ function renderCombatantList(session, clone) {
     }
 
     if (dm) {
+      const initInput = card.querySelector('.c-init-input');
+      if (initInput) {
+        initInput.addEventListener('change', () => {
+          c.init = parseInt(initInput.value) || 1;
+          saveState();
+        });
+      }
       const [dmgBtn, editBtn, healBtn] = card.querySelectorAll('.hp-btn');
       dmgBtn.onclick = () => { c.hp = Math.max(0, c.hp-1); saveState(); renderCombatantList(session, clone); };
       healBtn.onclick = () => { c.hp = Math.min(c.maxHp, c.hp+1); saveState(); renderCombatantList(session, clone); };
@@ -1271,16 +1538,81 @@ function renderCharList() {
 }
 
 function renderPlayerCharPanel(char) {
-  const panel = document.getElementById('player-char-view');
-  panel.innerHTML = `
-    <div class="entity-card" style="flex-direction:column;align-items:flex-start;gap:10px">
-      <div class="entity-card-info" style="flex-direction:column;gap:4px;align-items:flex-start">
-        <span class="entity-name" style="font-size:1.1rem">${char.name}</span>
-        <span class="entity-meta">${char.class||''} · ${char.race||''} · ${char.align||''}</span>
-        <span class="entity-meta">PV ${char.pv} | PM ${char.pm} | Armadura ${char.armor||'—'} | Oro ${char.gold||0}</span>
-        <span class="entity-meta">FUE ${char.fue} INT ${char.int} CAR ${char.car} DES ${char.des} VIDA ${char.vida}</span>
+  // Legacy — no longer used, kept for compat
+}
+
+function renderCharSheetView(char) {
+  console.log('[renderCharSheetView] called with:', char ? char.name : 'null');
+  const view = document.getElementById('charsheet-content');
+  console.log('[renderCharSheetView] view element:', view);
+  if (!view) { console.error('[renderCharSheetView] #charsheet-content NOT FOUND in DOM'); return; }
+  if (!char) {
+    // Diagnostic: if user has a charId but char wasn't found, show helpful message
+    const hasId = currentUser && currentUser.charId;
+    const charsLoaded = state.chars.length;
+    view.innerHTML = hasId && charsLoaded === 0
+      ? `<div style="font-family:'Cinzel',serif;color:var(--ink-faded);padding:30px;text-align:center;font-size:.85rem;letter-spacing:2px;line-height:2">
+           Cargando personaje…<br><span style="font-size:.7rem;opacity:.6">Si este mensaje persiste, recarga la página</span>
+         </div>`
+      : `<div style="font-family:'Cinzel',serif;color:var(--ink-faded);padding:30px;text-align:center;font-size:.85rem;letter-spacing:2px;">Sin personaje asignado</div>`;
+    return;
+  }
+  const skillNames = {nadar:'Nadar/Bucear',cerraduras:'Abrir Cerraduras',idiomas:'Idiomas',sigilo:'Sigilo',medicina:'Medicina',brutalidad:'Brutalidad',observacion:'Observación',intimidar:'Intimidar',enganar:'Engañar',persuasion:'Persuasión',acrobacias:'Acrobacias',montar:'Montar',agarrar:'Agarrar',reflejos:'Reflejos'};
+  const weaponNames = {espadas:'Espadas',dagas:'Dagas',arcos:'Arcos',mandobles:'Mandobles',hachas:'Hachas',contundentes:'Contundentes',arrojadizas:'Arrojadizas',sin_armas:'Sin armas'};
+  const costLabel = v => v===15?'●●●':v===5?'●●○':v===1?'●○○':'○○○';
+
+  const skillsHtml = Object.entries(skillNames).map(([k,l]) => {
+    const v = char.skills?.[k]||0;
+    return `<div class="skill-row"><span class="skill-attr"></span><label>${l}</label><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem">${costLabel(v)}</span></div>`;
+  }).join('');
+  const weaponsHtml = Object.entries(weaponNames).map(([k,l]) => {
+    const v = char.weaponSkills?.[k]||0;
+    return `<div class="skill-row"><label>${l}</label><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem">${costLabel(v)}</span></div>`;
+  }).join('');
+  const habsHtml = (char.habs||[]).map(h => `<div style="margin-bottom:8px"><strong style="font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold)">${h.name}</strong><p style="font-size:.9rem;color:var(--ink-faded);margin-top:3px">${h.desc||''}</p></div>`).join('');
+
+  view.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <h2 style="font-family:'Cinzel Decorative',serif;color:var(--gold);font-size:1.1rem">${char.name}</h2>
+      <button class="btn btn-gold btn-sm" onclick="openCharModal('${char.id}')">✎ Editar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="panel">
+        <div class="panel-header">Identidad</div>
+        <div class="panel-body" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Clase</span><div>${char.class||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Raza</span><div>${char.race||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Alineamiento</span><div>${char.align||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Jugador</span><div>${char.player||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Altura</span><div>${char.height||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Edad</span><div>${char.age||'—'}</div></div>
+        </div>
       </div>
-      <button class="btn btn-gold btn-sm" onclick="openCharModal('${char.id}')">Editar mi personaje</button>
+      <div class="panel">
+        <div class="panel-header">Atributos y Recursos</div>
+        <div class="panel-body">
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
+            ${['fue','int','car','des','vida'].map(a => {const v=char[a]||10;const m=v-10;return `<div class="attr-box"><label>${a.toUpperCase()}</label><div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--ink)">${v}</div>${a!=='vida'?`<span class="attr-mod">${m>=0?'+':''}${m}</span>`:''}</div>`}).join('')}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
+            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">PV</span><div style="font-family:'Cinzel',serif;font-size:1rem;color:var(--blood)">${char.pv||0}</div></div>
+            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">PM</span><div style="font-family:'Cinzel',serif;font-size:1rem;color:#4a7a9b">${char.pm||0}</div></div>
+            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Armadura</span><div>${char.armor||'—'}</div></div>
+            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Oro</span><div>${char.gold||0}</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">Habilidades</div>
+        <div class="panel-body"><div class="skills-grid">${skillsHtml}</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">Armamentísticas</div>
+        <div class="panel-body"><div class="skills-grid">${weaponsHtml}</div></div>
+      </div>
+      ${habsHtml ? `<div class="panel" style="grid-column:span 2"><div class="panel-header">Habilidades Especiales</div><div class="panel-body">${habsHtml}</div></div>` : ''}
+      ${char.backpack ? `<div class="panel"><div class="panel-header">Mochila</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.backpack}</div></div>` : ''}
+      ${char.notes ? `<div class="panel"><div class="panel-header">Notas</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.notes}</div></div>` : ''}
     </div>`;
 }
 
@@ -1336,7 +1668,7 @@ function renderEnemyList() {
   const list=document.getElementById('enemy-list'); list.innerHTML='';
   state.enemies.forEach(e=>{
     const card=document.createElement('div'); card.className='entity-card';
-    const actions=isDM()?`<button class="btn btn-outline btn-sm" onclick="openEnemyModal('${e.id}')">Editar</button><button class="btn btn-danger btn-sm" onclick="deleteEnemy('${e.id}')">Borrar</button>`:'';
+    const actions=isDM()?`<button class="btn btn-outline btn-sm" onclick="openEnemyModal('${e.id}')">Editar</button><button class="btn btn-outline btn-sm" onclick="cloneEnemy('${e.id}')" title="Clonar">⧉ Clonar</button><button class="btn btn-danger btn-sm" onclick="deleteEnemy('${e.id}')">Borrar</button>`:'';
     card.innerHTML=`
       <div class="entity-card-info">
         <span class="entity-name">${e.name}</span>
@@ -1351,6 +1683,17 @@ function deleteEnemy(id) {
   if(!confirm('¿Eliminar este tipo de enemigo?')) return;
   state.enemies=state.enemies.filter(e=>e.id!==id);
   saveState(); renderEnemyList();
+}
+
+function cloneEnemy(id) {
+  const src = state.enemies.find(e => e.id === id);
+  if (!src) return;
+  const clone = Object.assign({}, src, { id: uid(), name: src.name + ' (copia)' });
+  state.enemies.push(clone);
+  saveState();
+  renderEnemyList();
+  // Open editor so user can rename immediately
+  openEnemyModal(clone.id);
 }
 
 // ===========================
@@ -1509,14 +1852,15 @@ function showLoadingOverlay(show) {
     const user = state.users.find(u => u.id === savedId);
     if (user) {
       currentUser = user;
-      startRealtimeSync();
       applyRoleUI();
       rebuildSessionTabs();
       renderCharList();
       renderEnemyList();
       renderUserList();
-      switchView('maint');
+      console.log('[restore] about to switchView. isDM:', user.isDM, 'charId:', user.charId, 'chars in state:', state.chars.length);
+      switchView(user.isDM ? 'maint' : 'charsheet');
       document.getElementById('login-screen').classList.add('hidden');
+      startRealtimeSync(); // start AFTER view is rendered
     }
   }
 })();
@@ -1536,6 +1880,7 @@ _g.deleteChar            = deleteChar;
 _g.openEnemyModal        = openEnemyModal;
 _g.saveEnemy             = saveEnemy;
 _g.deleteEnemy           = deleteEnemy;
+_g.cloneEnemy            = cloneEnemy;
 _g.openUserModal         = openUserModal;
 _g.saveUser              = saveUser;
 _g.deleteUser            = deleteUser;
@@ -1553,6 +1898,8 @@ _g.addConditionConfirm   = addConditionConfirm;
 _g.closeModal            = closeModal;
 _g.openModal             = openModal;
 _g.switchView            = switchView;
+_g.togglePlayerPreview   = togglePlayerPreview;
+_g.renderCharSheetView   = renderCharSheetView;
 </script>
 </body>
 </html>
