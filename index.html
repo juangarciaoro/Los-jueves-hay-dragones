@@ -1375,8 +1375,25 @@ function applyHP(dir, exact) {
   const {session, idx, clone} = hpRef;
   const c = session.combatants[idx];
   const amount = parseInt(document.getElementById('hp-amount-in').value) || 1;
-  c.hp = exact ? Math.max(0, Math.min(c.maxHp, amount)) : Math.max(0, Math.min(c.maxHp, c.hp + dir*amount));
+  
+  if (exact) {
+    // Establecer valor exacto en HP (no afecta tempHp)
+    c.hp = Math.max(0, Math.min(c.maxHp, amount));
+  } else if (dir === -1) {
+    // Daño: primero descontar tempHp, luego hp
+    c.tempHp -= amount;
+    if (c.tempHp < 0) {
+      c.hp += c.tempHp; // c.tempHp es negativo, así que resta
+      c.tempHp = 0;
+    }
+    c.hp = Math.max(0, Math.min(c.maxHp, c.hp));
+  } else if (dir === 1) {
+    // Curar: solo curar HP normal, no tempHp
+    c.hp = Math.max(0, Math.min(c.maxHp, c.hp + amount));
+  }
+  
   document.getElementById('hp-current-display').textContent = `${c.hp} / ${c.maxHp}`;
+  document.getElementById('temp-hp-display').textContent = c.tempHp || 0;
   saveState();
   renderCombatantList(session, clone);
 }
