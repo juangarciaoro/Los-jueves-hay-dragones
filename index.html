@@ -754,7 +754,6 @@ select.form-input{
       </div>
       <div class="section-title">Recursos</div>
       <div class="char-form-grid">
-        <div class="form-group"><label class="flabel">Puntos de Vida (PV)</label><input class="form-input" id="cf-pv" type="number" value="10" min="0"></div>
         <div class="form-group"><label class="flabel">Puntos de Maná (PM)</label><input class="form-input" id="cf-pm" type="number" value="0" min="0"></div>
         <div class="form-group"><label class="flabel">Oro</label><input class="form-input" id="cf-gold" type="number" value="0" min="0"></div>
         <div class="form-group"><label class="flabel">Puntos de Habilidad</label><input class="form-input" id="cf-skillpts" type="number" value="0" min="0"></div>
@@ -820,13 +819,20 @@ select.form-input{
   <div class="modal" style="max-width:320px">
     <div class="modal-header"><span id="modal-hp-title">Modificar PV</span><button class="modal-close" onclick="closeModal('modal-hp')">✕</button></div>
     <div class="modal-body hp-edit-content">
+      <div><span style="color:var(--ink-faded);font-size:.65rem;letter-spacing:1px">PV Normales</span></div>
       <div class="hp-edit-value" id="hp-current-display">10 / 10</div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
         <input id="hp-amount-in" class="form-input form-input-sm" type="number" value="1" min="1" style="width:70px;text-align:center;font-size:1.1rem">
         <button class="btn btn-danger" onclick="applyHP(-1)">− Daño</button>
         <button class="btn btn-gold" onclick="applyHP(1)">+ Curar</button>
       </div>
-      <button class="btn btn-outline btn-sm" onclick="applyHP(0,true)">Establecer valor exacto</button>
+      <button class="btn btn-outline btn-sm" onclick="applyHP(0,true)" style="margin-bottom:16px">Establecer valor exacto</button>
+      <div><span style="color:var(--ink-faded);font-size:.65rem;letter-spacing:1px">PV Temporales</span></div>
+      <div class="hp-edit-value" id="temp-hp-display" style="color:#c9b07a">0</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="temp-hp-amount-in" class="form-input form-input-sm" type="number" value="0" min="0" style="width:70px;text-align:center;font-size:1.1rem">
+        <button class="btn btn-outline btn-sm" onclick="setTempHP()">Establecer</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1263,7 +1269,7 @@ function updateCombatantSourceSelect(clone, session) {
     const entity = list.find(x => x.id === srcId);
     if (!entity) return;
     clone.querySelector('.combatant-name-in').value = entity.name;
-    clone.querySelector('.combatant-hp-in').value = entity.pv || 10;
+    clone.querySelector('.combatant-hp-in').value = (type === 'pj' ? entity.vida : entity.pv) || 10;
   };
 }
 
@@ -1272,7 +1278,7 @@ function addCombatantToSession(session, clone) {
   const init = parseInt(clone.querySelector('.combatant-init-in').value) || 10;
   const hp   = parseInt(clone.querySelector('.combatant-hp-in').value) || 10;
   const type = clone.querySelector('.combatant-type-sel').value;
-  session.combatants.push({ id:uid(), name, init, hp, maxHp:hp, type, dead:false, conditions:[] });
+  session.combatants.push({ id:uid(), name, init, hp, maxHp:hp, tempHp:0, type, dead:false, conditions:[] });
   session.combatants.sort((a,b) => b.init - a.init);
   clone.querySelector('.combatant-name-in').value = '';
   saveState();
@@ -1287,16 +1293,18 @@ function renderCombatantList(session, clone) {
   session.combatants.forEach((c, idx) => {
     const aliveIdx = alive.indexOf(c);
     const isActive = !c.dead && aliveIdx === session.activeTurn;
-    const pct = Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100));
+    const totalHp = c.hp + (c.tempHp || 0);
+    const pct = Math.max(0, Math.min(100, (totalHp / c.maxHp) * 100));
     const barClass = pct > 60 ? 'ok' : pct > 25 ? 'low' : '';
     const card = document.createElement('div');
     card.className = 'combatant-card' + (isActive?' active-turn':'') + (c.dead?' dead':'');
     // Players: see HP of PJs but NOT enemies
     const showHp = dm || c.type === 'pj';
+    const hpDisplay = c.tempHp > 0 ? `${c.hp} + ${c.tempHp}T / ${c.maxHp}` : `${c.hp} / ${c.maxHp}`;
     const hpHtml = showHp
       ? `<div class="hp-bar-wrap">
           <div class="hp-bar-track"><div class="hp-bar-fill ${barClass}" style="width:${pct}%"></div></div>
-          <div class="hp-text">${c.hp} / ${c.maxHp}</div>
+          <div class="hp-text">${hpDisplay}</div>
         </div>`
       : `<div class="hp-bar-wrap"><div class="hp-text" style="font-style:italic;opacity:.5">—</div></div>`;
     card.innerHTML = `
@@ -1357,7 +1365,9 @@ function openHpModal(session, idx, clone) {
   const c = session.combatants[idx];
   document.getElementById('modal-hp-title').textContent = `PV — ${c.name}`;
   document.getElementById('hp-current-display').textContent = `${c.hp} / ${c.maxHp}`;
+  document.getElementById('temp-hp-display').textContent = c.tempHp || 0;
   document.getElementById('hp-amount-in').value = 1;
+  document.getElementById('temp-hp-amount-in').value = c.tempHp || 0;
   openModal('modal-hp');
 }
 function applyHP(dir, exact) {
@@ -1369,6 +1379,17 @@ function applyHP(dir, exact) {
   document.getElementById('hp-current-display').textContent = `${c.hp} / ${c.maxHp}`;
   saveState();
   renderCombatantList(session, clone);
+}
+function setTempHP() {
+  if (!hpRef) return;
+  const {session, idx, clone} = hpRef;
+  const c = session.combatants[idx];
+  const tempAmount = parseInt(document.getElementById('temp-hp-amount-in').value) || 0;
+  c.tempHp = Math.max(0, tempAmount);
+  document.getElementById('temp-hp-display').textContent = c.tempHp;
+  saveState();
+  renderCombatantList(session, clone);
+}
 }
 
 // ===========================
@@ -1541,7 +1562,7 @@ function saveChar() {
     fue:parseInt(document.getElementById('cf-fue').value)||10, int:parseInt(document.getElementById('cf-int').value)||10,
     car:parseInt(document.getElementById('cf-car').value)||10, des:parseInt(document.getElementById('cf-des').value)||10,
     vida:parseInt(document.getElementById('cf-vida').value)||10,
-    pv:parseInt(document.getElementById('cf-pv').value)||10, pm:parseInt(document.getElementById('cf-pm').value)||0,
+    pm:parseInt(document.getElementById('cf-pm').value)||0,
     gold:parseInt(document.getElementById('cf-gold').value)||0, skillpts:parseInt(document.getElementById('cf-skillpts').value)||0,
     armor:currentArmorSel, skills:Object.assign({},charSkillState), weaponSkills:Object.assign({},charWeaponSkillState),
     habs, backpack:document.getElementById('cf-backpack').value, notes:document.getElementById('cf-notes').value,
@@ -1643,7 +1664,6 @@ function renderCharSheetView(char) {
             ${['fue','int','car','des','vida'].map(a => {const v=char[a]||10;return `<div class="attr-box"><label>${a.toUpperCase()}</label><div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--ink)">${v}</div></div>`}).join('')}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
-            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">PV</span><div style="font-family:'Cinzel',serif;font-size:1rem;color:var(--blood)">${char.pv||0}</div></div>
             <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">PM</span><div style="font-family:'Cinzel',serif;font-size:1rem;color:#4a7a9b">${char.pm||0}</div></div>
             <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Armadura</span><div>${char.armor||'—'}</div></div>
             <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Oro</span><div>${char.gold||0}</div></div>
@@ -1944,6 +1964,7 @@ _g.addHab                = addHab;
 _g.setSkill              = setSkill;
 _g.setWeaponSkill        = setWeaponSkill;
 _g.applyHP               = applyHP;
+_g.setTempHP             = setTempHP;
 _g.setCondInput          = setCondInput;
 _g.addConditionConfirm   = addConditionConfirm;
 _g.closeModal            = closeModal;
