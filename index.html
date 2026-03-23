@@ -1825,6 +1825,9 @@ function deleteUser(id) {
 // ===========================
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+// Expose to global scope for onclick handlers in HTML
+window.openModal = openModal;
+window.closeModal = closeModal;
 document.querySelectorAll('.modal-overlay').forEach(overlay=>{
   overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.classList.remove('open'); });
 });
@@ -1919,6 +1922,7 @@ function showLoadingOverlay(show) {
 const _g = window;
 _g.doLogin               = doLogin;
 _g.doLogout              = doLogout;
+_g.switchView            = switchView;
 _g.switchMaintTab        = switchMaintTab;
 _g.openNewSessionModal   = openNewSessionModal;
 _g.createSession         = createSession;
@@ -1934,7 +1938,6 @@ _g.saveUser              = saveUser;
 _g.deleteUser            = deleteUser;
 _g.exportData            = exportData;
 _g.importData            = importData;
-_g.updateMod             = updateMod;
 _g.selectArmor           = selectArmor;
 _g.selectEnemyArmor      = selectEnemyArmor;
 _g.addHab                = addHab;
@@ -1945,6 +1948,8 @@ _g.setCondInput          = setCondInput;
 _g.addConditionConfirm   = addConditionConfirm;
 _g.closeModal            = closeModal;
 _g.openModal             = openModal;
+_g.renderCharSheetView   = renderCharSheetView;
+_g.togglePlayerPreview   = togglePlayerPreview;
 _g.switchView            = switchView;
 _g.togglePlayerPreview   = togglePlayerPreview;
 _g.renderCharSheetView   = renderCharSheetView;
