@@ -1412,7 +1412,7 @@ const WEAPON_SKILLS = [
 
 let editingCharId = null, editingEnemyId = null, editingUserId = null;
 let currentArmorSel = '', currentEnemyArmorSel = '';
-let charSkillState = {}, charWeaponSkillState = {};
+let charSkillState = {}, charWeaponSkillState = {}, charHabState = {};
 
 function updateMod(attr) {
   const val = parseInt(document.getElementById('cf-'+attr).value) || 0;
@@ -1428,8 +1428,30 @@ function selectEnemyArmor(t) {
 }
 function addHab() {
   const list = document.getElementById('cf-habs-list');
+  const habId = 'hab-' + uid();
   const row = document.createElement('div'); row.className = 'hab-row';
-  row.innerHTML = `<input class="form-input" placeholder="Nombre"><textarea class="form-input note-area" placeholder="Descripción…" style="min-height:60px;flex:2"></textarea><button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+  row.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;gap:6px">
+    <input class="form-input" placeholder="Nombre">
+    <textarea class="form-input note-area" placeholder="Descripción…" style="min-height:60px"></textarea>
+  </div>
+  <div class="skill-cost-btns" style="display:flex;flex-direction:column;gap:4px;min-width:80px">
+    <button type="button" class="cost-btn" data-hab-id="${habId}" data-level="1">●○○</button>
+    <button type="button" class="cost-btn" data-hab-id="${habId}" data-level="5">●●○</button>
+    <button type="button" class="cost-btn" data-hab-id="${habId}" data-level="15">●●●</button>
+  </div>
+  <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+  row.dataset.habId = habId;
+  row.querySelectorAll('[data-level]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const level = parseInt(btn.dataset.level);
+      charHabState[habId] = charHabState[habId] === level ? 0 : level;
+      row.querySelectorAll('[data-level]').forEach(b => b.classList.remove('sel1','sel5','sel15'));
+      if(charHabState[habId] === 1) row.querySelector('[data-level="1"]').classList.add('sel1');
+      else if(charHabState[habId] === 5) row.querySelector('[data-level="5"]').classList.add('sel5');
+      else if(charHabState[habId] === 15) row.querySelector('[data-level="15"]').classList.add('sel15');
+    });
+  });
   list.appendChild(row);
 }
 function renderSkillsGrid() {
@@ -1569,7 +1591,10 @@ function renderCharSheetView(char) {
     const v = char.weaponSkills?.[k]||0;
     return `<div class="skill-row"><label>${l}</label><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem">${costLabel(v)}</span></div>`;
   }).join('');
-  const habsHtml = (char.habs||[]).map(h => `<div style="margin-bottom:8px"><strong style="font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold)">${h.name}</strong><p style="font-size:.9rem;color:var(--ink-faded);margin-top:3px">${h.desc||''}</p></div>`).join('');
+  const habsHtml = (char.habs||[]).map(h => {
+    const desc = (h.desc||'').replace(/\n/g, '<br>');
+    return `<div style="margin-bottom:8px"><strong style="font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold)">${h.name}</strong><p style="font-size:.9rem;color:var(--ink-faded);margin-top:3px">${desc}</p></div>`;
+  }).join('');
 
   view.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
