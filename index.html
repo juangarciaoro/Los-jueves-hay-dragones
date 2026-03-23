@@ -1487,7 +1487,7 @@ function openCharModal(id) {
   // Players can only edit their own character
   if (!isDM() && id && currentUser.charId !== id) return;
   editingCharId = id||null;
-  charSkillState={}; charWeaponSkillState={}; currentArmorSel='';
+  charSkillState={}; charWeaponSkillState={}; charHabState={}; currentArmorSel='';
   document.getElementById('modal-char-title').textContent = id ? 'Editar Personaje' : 'Nuevo Personaje';
   const char = id ? state.chars.find(c=>c.id===id) : null;
   ['name','player','class','race','align','height','age','pv','pm','gold','skillpts','backpack','notes'].forEach(f=>{
@@ -1500,8 +1500,31 @@ function openCharModal(id) {
   ['L','M','P'].forEach(t=>document.getElementById('armor-'+t).classList.toggle('sel',currentArmorSel===t));
   const habsList=document.getElementById('cf-habs-list'); habsList.innerHTML='';
   if(char&&char.habs) char.habs.forEach(h=>{
-    const row=document.createElement('div'); row.className='hab-row';
-    row.innerHTML=`<input class="form-input" value="${h.name||''}" placeholder="Nombre"><textarea class="form-input note-area" style="min-height:60px;flex:2" placeholder="Descripción…">${h.desc||''}</textarea><button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+    const habId = 'hab-' + uid();
+    const row=document.createElement('div'); row.className='hab-row'; row.dataset.habId = habId;
+    const level = h.level||0;
+    charHabState[habId] = level;
+    row.innerHTML=`<div style="flex:1;display:flex;flex-direction:column;gap:6px">
+      <input class="form-input" value="${h.name||''}" placeholder="Nombre">
+      <textarea class="form-input note-area" style="min-height:60px" placeholder="Descripción…">${h.desc||''}</textarea>
+    </div>
+    <div class="skill-cost-btns" style="display:flex;flex-direction:column;gap:4px;min-width:80px">
+      <button type="button" class="cost-btn ${level===1?'sel1':''}" data-hab-id="${habId}" data-level="1">●○○</button>
+      <button type="button" class="cost-btn ${level===5?'sel5':''}" data-hab-id="${habId}" data-level="5">●●○</button>
+      <button type="button" class="cost-btn ${level===15?'sel15':''}" data-hab-id="${habId}" data-level="15">●●●</button>
+    </div>
+    <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+    row.querySelectorAll('[data-level]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const lv = parseInt(btn.dataset.level);
+        charHabState[habId] = charHabState[habId] === lv ? 0 : lv;
+        row.querySelectorAll('[data-level]').forEach(b => b.classList.remove('sel1','sel5','sel15'));
+        if(charHabState[habId] === 1) row.querySelector('[data-level="1"]').classList.add('sel1');
+        else if(charHabState[habId] === 5) row.querySelector('[data-level="5"]').classList.add('sel5');
+        else if(charHabState[habId] === 15) row.querySelector('[data-level="15"]').classList.add('sel15');
+      });
+    });
     habsList.appendChild(row);
   });
   renderSkillsGrid();
@@ -1511,7 +1534,10 @@ function openCharModal(id) {
 function saveChar() {
   const name = document.getElementById('cf-name').value.trim();
   if(!name){alert('El personaje necesita un nombre.');return;}
-  const habs = Array.from(document.querySelectorAll('#cf-habs-list .hab-row')).map(row=>({name:row.querySelector('input').value,desc:row.querySelector('textarea').value}));
+  const habs = Array.from(document.querySelectorAll('#cf-habs-list .hab-row')).map(row=>{
+    const habId = row.dataset.habId;
+    return {name:row.querySelector('input').value,desc:row.querySelector('textarea').value,level:charHabState[habId]||0};
+  });
   const char = {
     id:editingCharId||uid(), name,
     player:document.getElementById('cf-player').value, class:document.getElementById('cf-class').value,
@@ -1593,7 +1619,9 @@ function renderCharSheetView(char) {
   }).join('');
   const habsHtml = (char.habs||[]).map(h => {
     const desc = (h.desc||'').replace(/\n/g, '<br>');
-    return `<div style="margin-bottom:8px"><strong style="font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold)">${h.name}</strong><p style="font-size:.9rem;color:var(--ink-faded);margin-top:3px">${desc}</p></div>`;
+    const level = h.level||0;
+    const costLabel = lv => lv===15?'●●●':lv===5?'●●○':lv===1?'●○○':'○○○';
+    return `<div style="margin-bottom:8px;display:flex;gap:12px;align-items:flex-start"><div style="flex:1"><strong style="font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold)">${h.name}</strong><p style="font-size:.9rem;color:var(--ink-faded);margin-top:3px">${desc}</p></div><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem;white-space:nowrap">${costLabel(level)}</span></div>`;
   }).join('');
 
   view.innerHTML = `
