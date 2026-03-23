@@ -261,7 +261,6 @@ select.form-input{
 .attr-box label{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:1px;color:var(--gold);text-transform:uppercase;}
 .attr-box input{width:50px;text-align:center;font-family:'Crimson Text',serif;font-size:1rem;background:rgba(242,232,201,.8);border:1px solid var(--parchment-deep);border-radius:2px;padding:4px;color:var(--ink);outline:none;}
 .attr-box input:focus{border-color:var(--gold);}
-.attr-mod{font-family:'Cinzel',serif;font-size:.68rem;color:var(--ink-faded);}
 .skills-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
 .skill-row{display:flex;align-items:center;gap:6px;font-family:'Crimson Text',serif;font-size:.88rem;}
 .skill-row label{flex:1;color:var(--ink);}
@@ -747,11 +746,11 @@ select.form-input{
       </div>
       <div class="section-title">Atributos</div>
       <div class="attr-grid">
-        <div class="attr-box"><label>FUE</label><input type="number" id="cf-fue" value="10" oninput="updateMod('fue')"><span class="attr-mod" id="mod-fue">+0</span></div>
-        <div class="attr-box"><label>INT</label><input type="number" id="cf-int" value="10" oninput="updateMod('int')"><span class="attr-mod" id="mod-int">+0</span></div>
-        <div class="attr-box"><label>CAR</label><input type="number" id="cf-car" value="10" oninput="updateMod('car')"><span class="attr-mod" id="mod-car">+0</span></div>
-        <div class="attr-box"><label>DES</label><input type="number" id="cf-des" value="10" oninput="updateMod('des')"><span class="attr-mod" id="mod-des">+0</span></div>
-        <div class="attr-box"><label>VIDA</label><input type="number" id="cf-vida" value="10"><span class="attr-mod" style="visibility:hidden">—</span></div>
+        <div class="attr-box"><label>FUE</label><input type="number" id="cf-fue" value="10"></div>
+        <div class="attr-box"><label>INT</label><input type="number" id="cf-int" value="10"></div>
+        <div class="attr-box"><label>CAR</label><input type="number" id="cf-car" value="10"></div>
+        <div class="attr-box"><label>DES</label><input type="number" id="cf-des" value="10"></div>
+        <div class="attr-box"><label>VIDA</label><input type="number" id="cf-vida" value="10"></div>
       </div>
       <div class="section-title">Recursos</div>
       <div class="char-form-grid">
@@ -1414,10 +1413,6 @@ let editingCharId = null, editingEnemyId = null, editingUserId = null;
 let currentArmorSel = '', currentEnemyArmorSel = '';
 let charSkillState = {}, charWeaponSkillState = {}, charHabState = {};
 
-function updateMod(attr) {
-  const val = parseInt(document.getElementById('cf-'+attr).value) || 0;
-  const el = document.getElementById('mod-'+attr); if (el) { const m=val-10; el.textContent=(m>=0?'+':'')+m; }
-}
 function selectArmor(t) {
   currentArmorSel = currentArmorSel===t?'':t;
   ['L','M','P'].forEach(x => document.getElementById('armor-'+x).classList.toggle('sel', currentArmorSel===x));
@@ -1494,7 +1489,7 @@ function openCharModal(id) {
     const el=document.getElementById('cf-'+f); if(el) el.value = char?(char[f]||''):'';
   });
   ['fue','int','car','des','vida'].forEach(a=>{
-    const el=document.getElementById('cf-'+a); if(el){el.value=char?(char[a]||10):10; updateMod(a);}
+    const el=document.getElementById('cf-'+a); if(el){el.value=char?(char[a]||10):10;}
   });
   if(char){ charSkillState=Object.assign({},char.skills||{}); charWeaponSkillState=Object.assign({},char.weaponSkills||{}); currentArmorSel=char.armor||''; }
   ['L','M','P'].forEach(t=>document.getElementById('armor-'+t).classList.toggle('sel',currentArmorSel===t));
@@ -1645,7 +1640,7 @@ function renderCharSheetView(char) {
         <div class="panel-header">Atributos y Recursos</div>
         <div class="panel-body">
           <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
-            ${['fue','int','car','des','vida'].map(a => {const v=char[a]||10;const m=v-10;return `<div class="attr-box"><label>${a.toUpperCase()}</label><div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--ink)">${v}</div>${a!=='vida'?`<span class="attr-mod">${m>=0?'+':''}${m}</span>`:''}</div>`}).join('')}
+            ${['fue','int','car','des','vida'].map(a => {const v=char[a]||10;return `<div class="attr-box"><label>${a.toUpperCase()}</label><div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--ink)">${v}</div></div>`}).join('')}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
             <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">PV</span><div style="font-family:'Cinzel',serif;font-size:1rem;color:var(--blood)">${char.pv||0}</div></div>
