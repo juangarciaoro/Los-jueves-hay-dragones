@@ -993,7 +993,7 @@ function doLogout() {
   sessionStorage.removeItem('ljhd_user');
   currentUser = null;
   document.getElementById('session-tabs-container').innerHTML = '';
-  document.querySelectorAll('#main-content .view:not(#view-maint)').forEach(v => v.remove());
+  document.querySelectorAll('#main-content .view[data-session]').forEach(v => v.remove());
   document.getElementById('login-user').value = '';
   document.getElementById('login-pass').value = '';
   document.getElementById('login-error').textContent = '';
