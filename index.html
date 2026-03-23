@@ -1086,7 +1086,7 @@ function switchMaintTab(name, btn) {
 // ===========================
 function rebuildSessionTabs() {
   document.getElementById('session-tabs-container').innerHTML = '';
-  document.querySelectorAll('#main-content .view:not(#view-maint)').forEach(v => v.remove());
+  document.querySelectorAll('#main-content .view[data-session-id]').forEach(v => v.remove());
   state.sessions.forEach(session => {
     addSessionTab(session);
     buildSessionView(session);
