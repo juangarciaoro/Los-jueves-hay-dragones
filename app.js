@@ -20,7 +20,7 @@ const STATE_DOC = doc(db, 'campaign', 'state');
 // ===========================
 //  STATE
 // ===========================
-let state = { sessions:[], chars:[], enemies:[], users:[], estados:[] };
+let state = { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[] };
 let currentUser  = null;
 let _saveTimeout = null;
 let _unsubscribe = null;
@@ -51,6 +51,8 @@ async function loadState() {
       state.enemies  = data.enemies  || [];
       state.users    = data.users    || [];
       state.estados  = data.estados  || [];
+      state.actos    = data.actos    || [];
+      state.eventos  = data.eventos  || [];
     }
   } catch(e) { console.error('Firestore read:', e); }
   if (!state.users.some(u => u.isDM)) {
@@ -71,12 +73,20 @@ function startRealtimeSync() {
     state.enemies  = data.enemies  || [];
     state.users    = data.users    || [];
     state.estados  = data.estados  || [];
+    state.actos    = data.actos    || [];
+    state.eventos  = data.eventos  || [];
     if (currentUser && !state.users.find(u => u.id === currentUser.id)) { doLogout(); return; }
     if (currentUser) currentUser = state.users.find(u => u.id === currentUser.id) || currentUser;
     rebuildSessionTabs();
     renderCharList();
     renderEnemyList();
-    if (isDM()) { renderUserList(); renderEstadoList(); }
+    if (isDM()) {
+      renderUserList(); renderEstadoList(); renderActoList(); renderEventoList();
+      document.querySelectorAll('.view[data-session-id]').forEach(view => {
+        const s = state.sessions.find(x => x.id === view.dataset.sessionId);
+        if (s) renderSessionActos(s, view);
+      });
+    }
     applyRoleUI();
     // Re-render charsheet: if currently visible OR if player (charsheet is their home)
     const activeView = document.querySelector('.view.active');
@@ -290,7 +300,9 @@ function switchMaintSection(name, btn) {
     sesiones: '📖 Sesiones',
     enemigos: '👹 Tipos de Enemigos',
     usuarios: '👥 Usuarios',
-    estados: '✦ Estados',
+    estados: '⚡ Estados',
+    actos: '📜 Actos',
+    eventos: '🎲 Eventos Aleatorios',
     backup: '💾 Copia de Seguridad'
   };
   
@@ -313,7 +325,9 @@ function renderMaintLanding() {
     { id: 'sesiones', name: 'Sesiones', icon: '📖', dmOnly: true },
     { id: 'enemigos', name: 'Tipos de Enemigos', icon: '👹', alwaysShow: true },
     { id: 'usuarios', name: 'Usuarios', icon: '👥', dmOnly: true },
-    { id: 'estados', name: 'Estados', icon: '✦', dmOnly: true },
+    { id: 'estados', name: 'Estados', icon: '⚡', dmOnly: true },
+    { id: 'actos', name: 'Actos', icon: '📜', dmOnly: true },
+    { id: 'eventos', name: 'Eventos Aleatorios', icon: '🎲', dmOnly: true },
     { id: 'backup', name: 'Copia de Seguridad', icon: '💾', dmOnly: true }
   ];
   
@@ -533,13 +547,16 @@ function buildSessionView(session) {
 
   const dm = isDM();
 
+  // Grid layout: players don't have the actos column
+  if (!dm) clone.querySelector('.session-grid').classList.add('player-grid');
+
   // Diary read-only for players
   const diaryArea = clone.querySelector('[data-field="diary"]');
-  const titleInput = clone.querySelector('[data-field="title"]');
+  const titleInput = clone.querySelector('[data-session-name]');
+  if (titleInput) titleInput.value = session.name || '';
   const roLabel = clone.querySelector('#diary-ro-label');
   if (!dm) {
     diaryArea.setAttribute('readonly', true);
-    titleInput.setAttribute('readonly', true);
     if (roLabel) roLabel.style.display = 'inline';
   } else {
     if (roLabel) roLabel.style.display = 'none';
@@ -574,9 +591,44 @@ function buildSessionView(session) {
     }
   }
 
+  // Popup buttons
+  const notesBtn    = clone.querySelector('.btn-popup-notes');
+  const notesPopup  = clone.querySelector('.popup-notes');
+  const diceBtn     = clone.querySelector('.btn-popup-dice');
+  const dicePopup   = clone.querySelector('.popup-dice');
+
+  notesBtn.textContent = dm ? '🗒' : '📝';
+  notesBtn.title       = dm ? 'Notas del DM' : 'Mi Cuaderno';
+  const notesPopupTitle = clone.querySelector('.popup-notes-title');
+  if (notesPopupTitle) notesPopupTitle.textContent = dm ? '🗒 Notas del DM' : '📝 Mi Cuaderno';
+
+  function openPopup(popup, btn) {
+    popup.style.display = 'flex';
+    btn.classList.add('active');
+  }
+  function closePopup(popup, btn) {
+    popup.style.display = 'none';
+    btn.classList.remove('active');
+  }
+  notesBtn.addEventListener('click', () => {
+    if (notesPopup.style.display === 'none') { openPopup(notesPopup, notesBtn); closePopup(dicePopup, diceBtn); }
+    else closePopup(notesPopup, notesBtn);
+  });
+  clone.querySelector('.btn-close-notes').addEventListener('click', () => closePopup(notesPopup, notesBtn));
+  notesPopup.addEventListener('click', e => { if (e.target === notesPopup) closePopup(notesPopup, notesBtn); });
+
+  diceBtn.addEventListener('click', () => {
+    if (dicePopup.style.display === 'none') { openPopup(dicePopup, diceBtn); closePopup(notesPopup, notesBtn); }
+    else closePopup(dicePopup, diceBtn);
+  });
+  clone.querySelector('.btn-close-dice').addEventListener('click', () => closePopup(dicePopup, diceBtn));
+  dicePopup.addEventListener('click', e => { if (e.target === dicePopup) closePopup(dicePopup, diceBtn); });
+
   // Dice
   const rollDisplay = clone.querySelector('.result-rolls');
   const rollHistory = clone.querySelector('.roll-history');
+  const secretLabel = clone.querySelector('.dice-secret-label');
+  if (dm && secretLabel) secretLabel.style.display = 'none';
   renderRollHistory(session, rollHistory);
   clone.querySelectorAll('.dice-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -584,7 +636,9 @@ function buildSessionView(session) {
       const qty = Math.min(20, Math.max(1, parseInt(clone.querySelector('.dice-qty').value) || 1));
       const rolls = Array.from({length: qty}, () => Math.ceil(Math.random() * sides));
       const total = rolls.reduce((a,b) => a+b, 0);
-      const entry = { label:`${qty}d${sides}`, rolls, total, user: currentUser?.username || '?' };
+      const secret = clone.querySelector('.dice-secret-chk').checked;
+      const isDMroll = isDM();
+      const entry = { label:`${qty}d${sides}`, rolls, total, user: currentUser?.username || '?', secret, isDMroll };
       session.rollHistory.unshift(entry);
       if (session.rollHistory.length > 60) session.rollHistory.pop();
       saveState();
@@ -623,14 +677,97 @@ function buildSessionView(session) {
       saveState();
       renderCombatantList(session, clone);
     });
+    clone.querySelector('.clear-npcs-btn').addEventListener('click', () => {
+      session.combatants = session.combatants.filter(c => c.type === 'pj');
+      session.activeTurn = 0;
+      saveState();
+      renderCombatantList(session, clone);
+    });
     renderCombatantChips(clone, session);
     clone.querySelector('.add-combatant-btn').addEventListener('click', () => addCombatantToSession(session, clone));
   }
   renderCombatantList(session, clone);
+  if (dm) renderSessionActos(session, clone);
 
   console.log('[buildSessionView] appending clone to main-content. Clone id:', clone.id, 'display before:', clone.style.display, 'classList:', clone.className);
   document.getElementById('main-content').appendChild(clone);
   console.log('[buildSessionView] view appended successfully');
+}
+
+// ===========================
+//  SESSION ACTOS ACCORDION
+// ===========================
+function renderSessionActos(session, clone) {
+  const accordion = clone.querySelector('.actos-accordion');
+  if (!accordion) return;
+  accordion.innerHTML = '';
+  const sessionActos = state.actos.filter(a => a.sessionId === session.id);
+  if (sessionActos.length === 0) {
+    accordion.innerHTML = '<div style="padding:8px 2px;color:var(--text-muted);font-family:\'Crimson Text\',serif;font-style:italic;font-size:.9rem">No hay actos para esta sesi\u00f3n.</div>';
+    return;
+  }
+  sessionActos.forEach(acto => {
+    const item = document.createElement('div');
+    item.className = 'acto-item';
+    const header = document.createElement('div');
+    header.className = 'acto-header';
+    header.innerHTML = `<span class="acto-toggle">&#9658;</span><span class="acto-title">${acto.title}</span>`;
+    const body = document.createElement('div');
+    body.className = 'acto-body';
+    body.style.display = 'none';
+
+    // Contenido público + botón publicar
+    const pubRow = document.createElement('div');
+    pubRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
+    const pubLabel = document.createElement('label');
+    pubLabel.className = 'flabel';
+    pubLabel.style.margin = '0';
+    pubLabel.textContent = 'Contenido Público';
+    const pubBtn = document.createElement('button');
+    pubBtn.className = 'btn btn-outline btn-sm';
+    pubBtn.textContent = '📢 Publicar';
+    pubBtn.addEventListener('click', () => {
+      const text = acto.public || '';
+      if (!text) return;
+      const diary = clone.querySelector('[data-field="diary"]');
+      if (diary) {
+        diary.value = diary.value ? diary.value + '\n\n' + text : text;
+        session.diary = diary.value;
+        saveState();
+      }
+    });
+    pubRow.appendChild(pubLabel);
+    pubRow.appendChild(pubBtn);
+    const pubArea = document.createElement('textarea');
+    pubArea.className = 'note-area';
+    pubArea.style.minHeight = '80px';
+    pubArea.readOnly = true;
+    pubArea.value = acto.public || '';
+
+    // Contenido privado
+    const privLabel = document.createElement('label');
+    privLabel.className = 'flabel';
+    privLabel.textContent = 'Contenido Privado';
+    const privArea = document.createElement('textarea');
+    privArea.className = 'note-area';
+    privArea.style.minHeight = '80px';
+    privArea.readOnly = true;
+    privArea.value = acto.private || '';
+
+    body.appendChild(pubRow);
+    body.appendChild(pubArea);
+    body.appendChild(privLabel);
+    body.appendChild(privArea);
+
+    header.addEventListener('click', () => {
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      header.querySelector('.acto-toggle').innerHTML = open ? '&#9658;' : '&#9660;';
+    });
+    item.appendChild(header);
+    item.appendChild(body);
+    accordion.appendChild(item);
+  });
 }
 
 // ===========================
@@ -645,9 +782,13 @@ function renderRollDisplay(el, entry) {
 }
 function renderRollHistory(session, el) {
   el.innerHTML = '';
+  const dm = isDM();
   session.rollHistory.forEach(e => {
+    if (e.isDMroll && !dm) return;
+    if (e.secret && !dm && e.user !== currentUser?.username) return;
     const d = document.createElement('div'); d.className = 'roll-entry';
-    d.innerHTML = `<span><span class="ru">${e.user||'?'}</span><span class="rl">${e.label}</span></span><span class="rv">${e.rolls.length>1?'['+e.rolls.join(',')+'] = ':''}${e.total}</span>`;
+    const badge = e.secret ? ' <span class="roll-badge secret">🔒</span>' : (e.isDMroll ? ' <span class="roll-badge dm">🎭</span>' : '');
+    d.innerHTML = `<span><span class="ru">${e.user||'?'}</span>${badge}<span class="rl">${e.label}</span></span><span class="rv">${e.rolls.length>1?'['+e.rolls.join(',')+'] = ':''}${e.total}</span>`;
     el.appendChild(d);
   });
 }
@@ -683,7 +824,8 @@ function renderCombatantChips(clone, session) {
     chip.className = 'chip-enemy';
     chip.textContent = enemy.name;
     chip.onclick = () => {
-      session.combatants.push({ id:uid(), name:enemy.name, enemyId:enemy.id, init:10, hp:enemy.pv||10, maxHp:enemy.pv||10, tempHp:0, type:'enemy', dead:false, conditions:[] });
+      const rndInit = Math.ceil(Math.random() * 20);
+      session.combatants.push({ id:uid(), name:enemy.name, enemyId:enemy.id, init:rndInit, hp:enemy.pv||10, maxHp:enemy.pv||10, tempHp:0, type:'enemy', dead:false, conditions:[] });
       session.combatants.sort((a,b) => b.init - a.init);
       saveState();
       renderCombatantList(session, clone);
@@ -694,7 +836,7 @@ function renderCombatantChips(clone, session) {
 
 function addCombatantToSession(session, clone) {
   const name = clone.querySelector('.combatant-name-in').value.trim() || 'Desconocido';
-  const init = parseInt(clone.querySelector('.combatant-init-in').value) || 10;
+  const init = Math.ceil(Math.random() * 20);
   const hp   = parseInt(clone.querySelector('.combatant-hp-in').value) || 10;
   session.combatants.push({ id:uid(), name, init, hp, maxHp:hp, tempHp:0, type:'custom', dead:false, conditions:[] });
   session.combatants.sort((a,b) => b.init - a.init);
@@ -707,6 +849,7 @@ function renderCombatantList(session, clone) {
   const dm = isDM();
   const list = clone.querySelector('.combatant-list');
   list.innerHTML = '';
+  const cards = [];
   const alive = session.combatants.filter(c => !c.dead);
   session.combatants.forEach((c, idx) => {
     const aliveIdx = alive.indexOf(c);
@@ -715,7 +858,8 @@ function renderCombatantList(session, clone) {
     const pct = Math.max(0, Math.min(100, (totalHp / c.maxHp) * 100));
     const barClass = pct > 60 ? 'ok' : pct > 25 ? 'low' : '';
     const card = document.createElement('div');
-    card.className = 'combatant-card' + (isActive?' active-turn':'') + (c.dead?' dead':'');
+    const typeClass = c.type === 'pj' ? ' type-pj' : c.type === 'enemy' ? ' type-enemy' : '';
+    card.className = 'combatant-card' + typeClass + (isActive?' active-turn':'') + (c.dead?' dead':'');
     // Players: see HP of PJs but NOT enemies
     const showHp = dm || c.type === 'pj';
     const hpDisplay = c.tempHp > 0 ? `${c.hp} + ${c.tempHp}T / ${c.maxHp}` : `${c.hp} / ${c.maxHp}`;
@@ -726,16 +870,16 @@ function renderCombatantList(session, clone) {
         </div>`
       : `<div class="hp-bar-wrap"><div class="hp-text" style="font-style:italic;opacity:.5">—</div></div>`;
     const isOwnChar = !dm && c.type === 'pj' && currentUser?.charId && c.charId === currentUser.charId;
-    const initHtml = (dm || isOwnChar)
+    const canControl = dm || isOwnChar;
+    const initHtml = canControl
       ? `<input class="c-init-input" type="number" value="${c.init}" min="1" max="99" title="Editar iniciativa">`
       : `<div class="c-init">${c.init}</div>`;
     card.innerHTML = `
       <div class="c-init-wrap">${initHtml}</div>
       <div class="c-name">${c.name}<span class="c-type">${c.type==='pj'?'Personaje':c.type==='enemy'?'Enemigo':''}</span></div>
       ${hpHtml}
-      <div class="hp-actions ${dm?'':'player-hide'}">
+      <div class="hp-actions${canControl?'':' player-hide'}">
         <button class="hp-btn dmg" title="Daño">−</button>
-        <button class="hp-btn" title="Editar">✎</button>
         <button class="hp-btn heal" title="Curar">+</button>
       </div>
       <div class="conditions-wrap"></div>
@@ -748,11 +892,11 @@ function renderCombatantList(session, clone) {
     const condWrap = card.querySelector('.conditions-wrap');
     c.conditions.forEach((cond, ci) => {
       const tag = document.createElement('span'); tag.className = 'condition-tag';
-      tag.textContent = cond + (dm ? ' ✕' : '');
-      if (dm) tag.onclick = () => { c.conditions.splice(ci,1); saveState(); renderCombatantList(session, clone); };
+      tag.textContent = cond + (canControl ? ' ✕' : '');
+      if (canControl) tag.onclick = () => { c.conditions.splice(ci,1); saveState(); renderCombatantList(session, clone); };
       condWrap.appendChild(tag);
     });
-    if (dm) {
+    if (canControl) {
       const addBtn = document.createElement('button'); addBtn.className = 'add-cond-btn'; addBtn.textContent = '+ estado';
       addBtn.onclick = () => openCondModal(session, idx, clone);
       condWrap.appendChild(addBtn);
@@ -764,17 +908,31 @@ function renderCombatantList(session, clone) {
       initInput.addEventListener('change', () => { c.init = parseInt(initInput.value) || 1; saveState(); });
     }
 
-    if (dm) {
-      const [dmgBtn, editBtn, healBtn] = card.querySelectorAll('.hp-btn');
+    if (canControl) {
+      const [dmgBtn, healBtn] = card.querySelectorAll('.hp-btn');
       dmgBtn.onclick = () => { c.hp = Math.max(0, c.hp-1); saveState(); renderCombatantList(session, clone); };
       healBtn.onclick = () => { c.hp = Math.min(c.maxHp, c.hp+1); saveState(); renderCombatantList(session, clone); };
-      editBtn.onclick = () => openHpModal(session, idx, clone);
+    }
+    if (dm) {
       const [deadBtn, removeBtn] = card.querySelectorAll('.dead-btn');
       deadBtn.onclick = () => { c.dead = !c.dead; saveState(); renderCombatantList(session, clone); };
       removeBtn.onclick = () => { session.combatants.splice(idx,1); saveState(); renderCombatantList(session, clone); };
     }
-    list.appendChild(card);
+    cards.push(card);
   });
+  if (cards.length > 6) {
+    list.classList.add('multi-col');
+    const COL_SIZE = 6;
+    for (let i = 0; i < cards.length; i += COL_SIZE) {
+      const col = document.createElement('div');
+      col.className = 'combatant-column';
+      cards.slice(i, i + COL_SIZE).forEach(c => col.appendChild(c));
+      list.appendChild(col);
+    }
+  } else {
+    list.classList.remove('multi-col');
+    cards.forEach(c => list.appendChild(c));
+  }
   // Refresh chips so disabled state of PJ chips stays accurate
   renderCombatantChips(clone, session);
 }
@@ -911,8 +1069,264 @@ function deleteEstado(id) {
 }
 
 // ===========================
-//  CHAR FORM
+//  ACTOS MAINTENANCE
 // ===========================
+let editingActoId = null;
+
+function renderActoList() {
+  const list = document.getElementById('acto-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (state.actos.length === 0 && state.sessions.length === 0) {
+    list.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-family:\'Crimson Text\',serif">No hay actos definidos.</div>';
+    return;
+  }
+
+  // Group actos by session; show all sessions that have actos
+  const sessionIds = [...new Set(state.actos.map(a => a.sessionId))];
+  if (sessionIds.length === 0) {
+    list.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-family:\'Crimson Text\',serif">No hay actos definidos.</div>';
+    return;
+  }
+
+  sessionIds.forEach(sid => {
+    const session = state.sessions.find(s => s.id === sid);
+    const actos = state.actos.filter(a => a.sessionId === sid);
+
+    // Session node
+    const sessionNode = document.createElement('div');
+    sessionNode.className = 'tree-session';
+    const sessionHeader = document.createElement('div');
+    sessionHeader.className = 'tree-session-header';
+    sessionHeader.innerHTML = `<span class="tree-toggle">▾</span><span class="tree-session-name">${session ? session.name : sid}</span><span class="tree-count">${actos.length} acto${actos.length !== 1 ? 's' : ''}</span>`;
+    const childWrap = document.createElement('div');
+    childWrap.className = 'tree-children';
+    sessionHeader.addEventListener('click', () => {
+      const collapsed = childWrap.classList.toggle('collapsed');
+      sessionHeader.querySelector('.tree-toggle').textContent = collapsed ? '▸' : '▾';
+    });
+    sessionNode.appendChild(sessionHeader);
+
+    actos.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'tree-leaf entity-card';
+      row.innerHTML = `
+        <div class="entity-card-info">
+          <span class="entity-name">${a.title}</span>
+        </div>
+        <div class="entity-actions">
+          <button class="btn btn-outline btn-sm" onclick="openActoModal('${a.id}')">✎ Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteActo('${a.id}')">✕ Eliminar</button>
+        </div>`;
+      childWrap.appendChild(row);
+    });
+
+    sessionNode.appendChild(childWrap);
+    list.appendChild(sessionNode);
+  });
+}
+
+function openActoModal(id) {
+  editingActoId = id || null;
+  const a = id ? state.actos.find(x => x.id === id) : null;
+  document.getElementById('modal-acto-title').textContent = id ? 'Editar Acto' : 'Nuevo Acto';
+  // Populate session dropdown
+  const sel = document.getElementById('af-session');
+  sel.innerHTML = '<option value="">— Selecciona sesión —</option>';
+  state.sessions.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.name;
+    if (a && a.sessionId === s.id) o.selected = true;
+    sel.appendChild(o);
+  });
+  document.getElementById('af-title').value = a ? a.title : '';
+  document.getElementById('af-public').value = a ? (a.public || '') : '';
+  document.getElementById('af-private').value = a ? (a.private || '') : '';
+  openModal('modal-acto');
+}
+
+function saveActo() {
+  const sessionId = document.getElementById('af-session').value;
+  const title = document.getElementById('af-title').value.trim();
+  if (!sessionId || !title) return;
+  const obj = {
+    sessionId,
+    title,
+    public:  document.getElementById('af-public').value.trim(),
+    private: document.getElementById('af-private').value.trim()
+  };
+  if (editingActoId) {
+    const idx = state.actos.findIndex(a => a.id === editingActoId);
+    if (idx !== -1) state.actos[idx] = { id: editingActoId, ...obj };
+  } else {
+    state.actos.push({ id: uid(), ...obj });
+  }
+  saveState();
+  closeModal('modal-acto');
+  renderActoList();
+}
+
+function deleteActo(id) {
+  if (!confirm('¿Eliminar acto? Los eventos asociados perderán su referencia.')) return;
+  const idx = state.actos.findIndex(a => a.id === id);
+  if (idx === -1) return;
+  state.actos.splice(idx, 1);
+  saveState();
+  renderActoList();
+}
+
+// ===========================
+//  EVENTOS ALEATORIOS
+// ===========================
+let editingEventoId = null;
+
+const EVENTO_CAT_COLORS = { Tensión:'#c86e1e', Combate:'#a02020', Social:'#3ca050', Entorno:'#3a7ab8' };
+
+function renderEventoList() {
+  const list = document.getElementById('evento-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (state.eventos.length === 0) {
+    list.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-family:\'Crimson Text\',serif">No hay eventos aleatorios definidos.</div>';
+    return;
+  }
+
+  // Group by session
+  const sessionIds = [...new Set(state.eventos.map(e => e.sessionId))];
+
+  sessionIds.forEach(sid => {
+    const session = state.sessions.find(s => s.id === sid);
+    const sessionEventos = state.eventos.filter(e => e.sessionId === sid);
+
+    const sessionNode = document.createElement('div');
+    sessionNode.className = 'tree-session';
+    const sessionHeader = document.createElement('div');
+    sessionHeader.className = 'tree-session-header';
+    sessionHeader.innerHTML = `<span class="tree-toggle">▾</span><span class="tree-session-name">${session ? session.name : sid}</span><span class="tree-count">${sessionEventos.length} evento${sessionEventos.length !== 1 ? 's' : ''}</span>`;
+    const sessionChildren = document.createElement('div');
+    sessionChildren.className = 'tree-children';
+    sessionHeader.addEventListener('click', () => {
+      const collapsed = sessionChildren.classList.toggle('collapsed');
+      sessionHeader.querySelector('.tree-toggle').textContent = collapsed ? '▸' : '▾';
+    });
+    sessionNode.appendChild(sessionHeader);
+
+    // Group by acto within session
+    const actoIds = [...new Set(sessionEventos.map(e => e.actoId || '__none__'))];
+    actoIds.forEach(aid => {
+      const acto = aid !== '__none__' ? state.actos.find(a => a.id === aid) : null;
+      const actoEventos = sessionEventos.filter(e => (e.actoId || '__none__') === aid);
+
+      const actoNode = document.createElement('div');
+      actoNode.className = 'tree-acto';
+      const actoHeader = document.createElement('div');
+      actoHeader.className = 'tree-acto-header';
+      actoHeader.innerHTML = `<span class="tree-toggle">▾</span><span class="tree-acto-name">${acto ? acto.title : '— Sin acto —'}</span><span class="tree-count">${actoEventos.length}</span>`;
+      const actoChildren = document.createElement('div');
+      actoChildren.className = 'tree-children';
+      actoHeader.addEventListener('click', () => {
+        const collapsed = actoChildren.classList.toggle('collapsed');
+        actoHeader.querySelector('.tree-toggle').textContent = collapsed ? '▸' : '▾';
+      });
+      actoNode.appendChild(actoHeader);
+
+      actoEventos.forEach(e => {
+        const color = EVENTO_CAT_COLORS[e.categoria] || 'var(--text-muted)';
+        const row = document.createElement('div');
+        row.className = 'tree-leaf entity-card';
+        row.innerHTML = `
+          <div class="entity-card-info">
+            <span class="entity-name">${e.title}</span>
+            <span class="evento-cat-badge" style="color:${color}">${e.categoria}</span>
+          </div>
+          <div class="entity-actions">
+            <button class="btn btn-outline btn-sm" onclick="openEventoModal('${e.id}')">✎ Editar</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteEvento('${e.id}')">✕ Eliminar</button>
+          </div>`;
+        actoChildren.appendChild(row);
+      });
+
+      actoNode.appendChild(actoChildren);
+      sessionChildren.appendChild(actoNode);
+    });
+
+    sessionNode.appendChild(sessionChildren);
+    list.appendChild(sessionNode);
+  });
+}
+
+function openEventoModal(id) {
+  editingEventoId = id || null;
+  const e = id ? state.eventos.find(x => x.id === id) : null;
+  document.getElementById('modal-evento-title').textContent = id ? 'Editar Evento' : 'Nuevo Evento Aleatorio';
+  // Session dropdown
+  const sSel = document.getElementById('ef2-session');
+  sSel.innerHTML = '<option value="">— Selecciona sesión —</option>';
+  state.sessions.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.name;
+    if (e && e.sessionId === s.id) o.selected = true;
+    sSel.appendChild(o);
+  });
+  // Populate acto dropdown for current session
+  populateEventoActos(e ? e.sessionId : null, e ? e.actoId : null);
+  document.getElementById('ef2-cat').value = e ? e.categoria : 'Tensión';
+  document.getElementById('ef2-title').value = e ? e.title : '';
+  document.getElementById('ef2-public').value = e ? (e.public || '') : '';
+  document.getElementById('ef2-private').value = e ? (e.private || '') : '';
+  openModal('modal-evento');
+}
+
+function onEventoSessionChange() {
+  const sessionId = document.getElementById('ef2-session').value;
+  populateEventoActos(sessionId, null);
+}
+
+function populateEventoActos(sessionId, selectedActoId) {
+  const aSel = document.getElementById('ef2-acto');
+  aSel.innerHTML = '<option value="">— Selecciona acto —</option>';
+  if (!sessionId) { aSel.disabled = true; return; }
+  const actos = state.actos.filter(a => a.sessionId === sessionId);
+  actos.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id; o.textContent = a.title;
+    if (a.id === selectedActoId) o.selected = true;
+    aSel.appendChild(o);
+  });
+  aSel.disabled = actos.length === 0;
+}
+
+function saveEvento() {
+  const sessionId = document.getElementById('ef2-session').value;
+  const actoId = document.getElementById('ef2-acto').value;
+  const title = document.getElementById('ef2-title').value.trim();
+  if (!sessionId || !title) return;
+  const obj = {
+    sessionId,
+    actoId: actoId || null,
+    categoria: document.getElementById('ef2-cat').value,
+    title,
+    public:  document.getElementById('ef2-public').value.trim(),
+    private: document.getElementById('ef2-private').value.trim()
+  };
+  if (editingEventoId) {
+    const idx = state.eventos.findIndex(e => e.id === editingEventoId);
+    if (idx !== -1) state.eventos[idx] = { id: editingEventoId, ...obj };
+  } else {
+    state.eventos.push({ id: uid(), ...obj });
+  }
+  saveState();
+  closeModal('modal-evento');
+  renderEventoList();
+}
+
+function deleteEvento(id) {
+  const idx = state.eventos.findIndex(e => e.id === id);
+  if (idx === -1) return;
+  state.eventos.splice(idx, 1);
+  saveState();
+  renderEventoList();
+}
 const SKILLS = [
   {key:'nadar',label:'Nadar / Bucear',attr:'DES'},{key:'cerraduras',label:'Abrir Cerraduras',attr:'INT'},
   {key:'idiomas',label:'Idiomas',attr:'INT'},{key:'sigilo',label:'Sigilo',attr:'DES'},
@@ -1443,6 +1857,7 @@ function showLoadingOverlay(show) {
 const _g = window;
 _g.doLogin               = doLogin;
 _g.doLogout              = doLogout;
+_g.renderSessionActos    = renderSessionActos;
 _g.switchView            = switchView;
 _g.switchMaintTab        = switchMaintTab;
 _g.switchMaintSection    = switchMaintSection;
@@ -1479,3 +1894,10 @@ _g.renderActiveSessions  = renderActiveSessions;
 _g.addEstado             = addEstado;
 _g.deleteEstado          = deleteEstado;
 _g.renderEstadoList      = renderEstadoList;
+_g.openActoModal         = openActoModal;
+_g.saveActo              = saveActo;
+_g.deleteActo            = deleteActo;
+_g.openEventoModal       = openEventoModal;
+_g.saveEvento            = saveEvento;
+_g.deleteEvento          = deleteEvento;
+_g.onEventoSessionChange = onEventoSessionChange;

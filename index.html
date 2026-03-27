@@ -6,6 +6,7 @@
 <title>Los Jueves Hay Dragones</title>
 <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+</head>
 <body>
 
 <!-- ===== LOGIN ===== -->
@@ -61,9 +62,6 @@
         <p class="landing-sub">Mesa del Director de Juego</p>
       </div>
       <div id="landing-buttons"></div>
-      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="doLogout()">Salir</button>
-      </div>
     </div>
   </div>
 
@@ -125,6 +123,18 @@
       </div>
       <div id="estado-list" class="entity-list"></div>
     </div>
+    <div id="maint-actos" class="maint-section">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-gold btn-sm" onclick="openActoModal()">+ Añadir Acto</button>
+      </div>
+      <div id="acto-list" class="entity-list"></div>
+    </div>
+    <div id="maint-eventos" class="maint-section">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-gold btn-sm" onclick="openEventoModal()">+ Añadir Evento</button>
+      </div>
+      <div id="evento-list" class="entity-list"></div>
+    </div>
     <div id="maint-backup" class="maint-section">
       <div style="display:flex;flex-direction:column;gap:12px;max-width:480px">
         <p style="font-family:'Crimson Text',serif;font-size:1rem;color:var(--parchment-deep);line-height:1.6">
@@ -156,50 +166,27 @@
 <!-- ===== SESSION VIEW TEMPLATE ===== -->
 <div id="session-view-template" style="display:none">
   <div class="session-grid">
-    <!-- DIARIO -->
+    <!-- DIARIO (fila completa) -->
     <div class="panel" id="panel-diary">
       <div class="panel-header">📖 Diario de Campaña <span class="readonly-label" id="diary-ro-label" style="display:none">Solo lectura</span></div>
       <div class="panel-body">
-        <input class="session-title-input" placeholder="Título de la sesión…" data-field="title">
+        <input class="session-title-input" placeholder="Título de la sesión…" data-session-name readonly>
         <textarea class="note-area" style="min-height:150px" placeholder="Resumen y eventos importantes…" data-field="diary"></textarea>
       </div>
     </div>
-    <!-- NOTAS DM (solo DM) -->
-    <div class="panel dm-only-ctrl" id="panel-dm-notes">
-      <div class="panel-header">🗒 Notas del DM</div>
-      <div class="panel-body" style="display:flex;flex-direction:column;gap:10px">
-        <textarea class="note-area" style="flex:2;min-height:110px" placeholder="Notas privadas, conspiraciones, secretos…" data-field="dm_notes"></textarea>
-        <div class="ornament">✦ ✦ ✦</div>
-        <label class="flabel">Notas Rápidas</label>
-        <textarea class="note-area" style="min-height:60px" placeholder="Apuntes al vuelo…" data-field="quick_notes"></textarea>
+    <!-- ACTOS (solo DM, fila 1 columna derecha) -->
+    <div class="panel dm-only-ctrl" id="panel-actos">
+      <div class="panel-header">📜 Actos</div>
+      <div class="panel-body">
+        <div class="actos-accordion"></div>
       </div>
     </div>
-    <!-- NOTAS JUGADOR (solo jugadores) -->
-    <div class="panel player-notes-panel-wrap" style="display:none">
-      <div class="panel-header">📝 Mi Cuaderno</div>
-      <div class="panel-body player-notes-panel">
-        <textarea class="note-area" style="min-height:200px" placeholder="Tus notas personales… solo tú las ves." data-field="player_note"></textarea>
-      </div>
+    <!-- BOTONES DE HERRAMIENTAS (columna izquierda, fila 2) -->
+    <div class="session-tool-btns">
+      <button class="tool-popup-btn btn-popup-notes" title="Notas">📝</button>
+      <button class="tool-popup-btn btn-popup-dice" title="Dados">🎲</button>
     </div>
-    <!-- DADOS -->
-    <div class="panel" id="panel-dice">
-      <div class="panel-header">🎲 Tiradas de Dados</div>
-      <div class="panel-body dice-section">
-        <div class="dice-result-display"><span class="result-rolls">—</span></div>
-        <div class="dice-controls">
-          <div class="dice-group">
-            <label>Cantidad</label>
-            <input class="qty-input dice-qty" type="number" min="1" max="20" value="1">
-          </div>
-          <button class="dice-btn" data-sides="4">d4</button>
-          <button class="dice-btn" data-sides="20">d20</button>
-          <button class="dice-btn" data-sides="100">d100</button>
-          <button class="btn btn-outline btn-sm clear-dice-btn" style="margin-left:auto">Limpiar</button>
-        </div>
-        <div class="roll-history"></div>
-      </div>
-    </div>
-    <!-- INICIATIVA -->
+    <!-- INICIATIVA (columna derecha, fila 2) -->
     <div class="panel" id="panel-init">
       <div class="panel-header">⚔ Gestor de Iniciativa</div>
       <div class="panel-body">
@@ -207,6 +194,7 @@
           <button class="btn btn-gold btn-sm next-turn-btn dm-only-ctrl">► Siguiente turno</button>
           <button class="btn btn-outline btn-sm reset-combat-btn dm-only-ctrl">↺ Reiniciar</button>
           <button class="btn btn-outline btn-sm sort-init-btn dm-only-ctrl" title="Ordenar por iniciativa">⇅ Ordenar</button>
+          <button class="btn btn-outline btn-sm clear-npcs-btn dm-only-ctrl" title="Eliminar enemigos y libres">🗑 Limpiar NPCs</button>
           <div class="init-round">Ronda <span class="round-num">1</span></div>
         </div>
         <div class="combatant-list"></div>
@@ -218,11 +206,58 @@
           <div class="combatant-section-label">Libre</div>
           <div class="combatant-quick-add">
             <input class="form-input form-input-md combatant-name-in" placeholder="Nombre…">
-            <input class="form-input form-input-sm combatant-init-in" type="number" value="10" min="1" max="99" title="Iniciativa">
             <input class="form-input form-input-sm combatant-hp-in" type="number" value="10" min="1" title="PV Máx">
             <button class="btn btn-gold btn-sm add-combatant-btn">Añadir</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: NOTAS -->
+  <div class="session-popup popup-notes" style="display:none">
+    <div class="session-popup-inner">
+      <div class="session-popup-header">
+        <span class="popup-notes-title">📝 Notas</span>
+        <button class="session-popup-close btn-close-notes">✕</button>
+      </div>
+      <div class="session-popup-body" style="display:flex;flex-direction:column;gap:10px">
+        <!-- DM notes (oculto para jugadores via dm-only-ctrl) -->
+        <div class="dm-only-ctrl" style="display:flex;flex-direction:column;gap:10px">
+          <textarea class="note-area" style="min-height:120px" placeholder="Notas privadas, conspiraciones, secretos…" data-field="dm_notes"></textarea>
+          <div class="ornament">✦ ✦ ✦</div>
+          <label class="flabel">Notas Rápidas</label>
+          <textarea class="note-area" style="min-height:70px" placeholder="Apuntes al vuelo…" data-field="quick_notes"></textarea>
+        </div>
+        <!-- Notas jugador (oculto para DM) -->
+        <div class="player-notes-panel-wrap" style="display:none">
+          <textarea class="note-area" style="min-height:220px" placeholder="Tus notas personales… solo tú las ves." data-field="player_note"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: DADOS -->
+  <div class="session-popup popup-dice" style="display:none">
+    <div class="session-popup-inner">
+      <div class="session-popup-header">
+        <span>🎲 Tiradas de Dados</span>
+        <button class="session-popup-close btn-close-dice">✕</button>
+      </div>
+      <div class="session-popup-body dice-section">
+        <div class="dice-result-display"><span class="result-rolls">—</span></div>
+        <div class="dice-controls">
+          <div class="dice-group">
+            <label>Cantidad</label>
+            <input class="qty-input dice-qty" type="number" min="1" max="20" value="1">
+          </div>
+          <button class="dice-btn" data-sides="4">d4</button>
+          <button class="dice-btn" data-sides="20">d20</button>
+          <button class="dice-btn" data-sides="100">d100</button>
+          <label class="dice-secret-label"><input type="checkbox" class="dice-secret-chk"> 🔒 Secreta</label>
+          <button class="btn btn-outline btn-sm clear-dice-btn" style="margin-left:auto">Limpiar</button>
+        </div>
+        <div class="roll-history"></div>
       </div>
     </div>
   </div>
@@ -396,6 +431,79 @@
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-cond')">Cancelar</button>
       <button class="btn btn-gold btn-sm" onclick="addConditionConfirm()">Añadir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACTO -->
+<div id="modal-acto" class="modal-overlay">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header"><span id="modal-acto-title">Nuevo Acto</span><button class="modal-close" onclick="closeModal('modal-acto')">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div class="form-group">
+        <label class="flabel">Sesión</label>
+        <select id="af-session" class="form-input" style="width:100%"></select>
+      </div>
+      <div class="form-group">
+        <label class="flabel">Título</label>
+        <input id="af-title" class="form-input" style="width:100%" placeholder="Título del acto…">
+      </div>
+      <div class="form-group">
+        <label class="flabel">Contenido público</label>
+        <textarea id="af-public" class="note-area" style="min-height:90px" placeholder="Descripción que verán los jugadores…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="flabel">Contenido privado (chuleta DM)</label>
+        <textarea id="af-private" class="note-area" style="min-height:90px" placeholder="Notas internas del DM…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-acto')">Cancelar</button>
+      <button class="btn btn-gold btn-sm" onclick="saveActo()">Guardar Acto</button>
+    </div>
+  </div>
+</div>
+
+<!-- EVENTO ALEATORIO -->
+<div id="modal-evento" class="modal-overlay">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header"><span id="modal-evento-title">Nuevo Evento Aleatorio</span><button class="modal-close" onclick="closeModal('modal-evento')">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div class="char-form-grid">
+        <div class="form-group">
+          <label class="flabel">Sesión</label>
+          <select id="ef2-session" class="form-input" style="width:100%" onchange="onEventoSessionChange()"></select>
+        </div>
+        <div class="form-group">
+          <label class="flabel">Acto</label>
+          <select id="ef2-acto" class="form-input" style="width:100%" disabled></select>
+        </div>
+        <div class="form-group">
+          <label class="flabel">Categoría</label>
+          <select id="ef2-cat" class="form-input" style="width:100%">
+            <option value="Tensión">Tensión</option>
+            <option value="Combate">Combate</option>
+            <option value="Social">Social</option>
+            <option value="Entorno">Entorno</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="flabel">Título</label>
+          <input id="ef2-title" class="form-input" style="width:100%" placeholder="Título del evento…">
+        </div>
+        <div class="form-group span2">
+          <label class="flabel">Contenido público</label>
+          <textarea id="ef2-public" class="note-area" style="min-height:80px" placeholder="Descripción que verán los jugadores…"></textarea>
+        </div>
+        <div class="form-group span2">
+          <label class="flabel">Contenido privado (chuleta DM)</label>
+          <textarea id="ef2-private" class="note-area" style="min-height:80px" placeholder="Notas internas del DM…"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-evento')">Cancelar</button>
+      <button class="btn btn-gold btn-sm" onclick="saveEvento()">Guardar Evento</button>
     </div>
   </div>
 </div>
