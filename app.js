@@ -1870,8 +1870,8 @@ function saveChar() {
   closeModal('modal-char');
   renderCharList();
   showToast('Personaje guardado', 'success');
-  // If player updated their own char, refresh player panel
-  if(!isDM()) { const myChar=state.chars.find(c=>c.id===currentUser.charId); if(myChar) renderPlayerCharPanel(myChar); }
+  // If player updated their own char, refresh charsheet view
+  if(!isDM()) { const myChar=state.chars.find(c=>c.id===currentUser.charId); if(myChar) renderCharSheetView(myChar); }
 }
 
 function renderCharList() {
