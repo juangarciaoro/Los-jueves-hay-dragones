@@ -800,8 +800,8 @@ function createSession() {
   saveState();
   closeModal('modal-new-session');
   buildSessionView(session);
-  switchView(session.id);
   renderSessionList();
+  openSessionEdit(session.id);
   showToast('Sesión creada', 'success');
 }
 
