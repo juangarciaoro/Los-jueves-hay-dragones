@@ -15,28 +15,296 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const db    = getFirestore(fbApp);
-const STATE_DOC = doc(db, 'campaign', 'state');
+const LEGACY_STATE_DOC = doc(db, 'campaign', 'state');
+const CAMPAIGNS_INDEX_DOC = doc(db, 'app', 'campaigns');
+const APP_USERS_DOC = doc(db, 'app', 'users');
 
 // ===========================
 //  STATE
 // ===========================
 let state = { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
+let campaigns = [];
+let globalUsers = [];
+let currentCampaignId = null;
 let currentUser  = null;
 let _saveTimeout = null;
 let _unsubscribe = null;
+let _usersUnsubscribe = null;
 let _ignoreNext  = false;
 let _playerPreview = false; // DM preview mode as player
+
+function emptyState() {
+  return { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
+}
+
+function normalizeState(data) {
+  return {
+    sessions: data?.sessions || [],
+    chars: data?.chars || [],
+    enemies: data?.enemies || [],
+    users: data?.users || [],
+    estados: data?.estados || [],
+    actos: data?.actos || [],
+    eventos: data?.eventos || [],
+    playerNotes: data?.playerNotes || {}
+  };
+}
+
+function getCurrentStateDoc() {
+  return currentCampaignId ? doc(db, 'campaigns', currentCampaignId) : null;
+}
+
+function slugifyCampaignName(name) {
+  const base = (name || 'campana')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return base || 'campana';
+}
+
+function getUniqueCampaignId(name) {
+  const base = slugifyCampaignName(name);
+  let candidate = base;
+  let n = 2;
+  const ids = new Set(campaigns.map(c => c.id));
+  while (ids.has(candidate)) {
+    candidate = `${base}-${n}`;
+    n++;
+  }
+  return candidate;
+}
+
+async function saveCampaignCatalog() {
+  await setDoc(CAMPAIGNS_INDEX_DOC, { campaigns }, { merge: true });
+}
+
+function normalizeUser(u) {
+  return {
+    id: u?.id || uid(),
+    username: (u?.username || '').trim(),
+    passwordHash: u?.passwordHash || hashPassword('dm1234'),
+    isDM: !!u?.isDM,
+    charId: u?.charId || null
+  };
+}
+
+function sanitizeUsers(users) {
+  const seen = new Set();
+  const out = [];
+  (users || []).forEach(raw => {
+    const u = normalizeUser(raw);
+    if (!u.username) return;
+    const key = u.username.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(u);
+  });
+  if (!out.some(u => u.isDM)) {
+    out.push({ id: uid(), username: 'dm', passwordHash: hashPassword('dm1234'), isDM: true, charId: null });
+  }
+  return out;
+}
+
+async function saveGlobalUsers() {
+  globalUsers = sanitizeUsers(globalUsers);
+  await setDoc(APP_USERS_DOC, { users: globalUsers }, { merge: true });
+}
+
+async function ensureGlobalUsers(seedUsers = []) {
+  const usersSnap = await getDoc(APP_USERS_DOC);
+  if (usersSnap.exists() && Array.isArray(usersSnap.data().users) && usersSnap.data().users.length) {
+    globalUsers = sanitizeUsers(usersSnap.data().users);
+    return;
+  }
+
+  let seed = Array.isArray(seedUsers) ? [...seedUsers] : [];
+  if (!seed.length && campaigns.length) {
+    const firstCampaign = campaigns.find(c => !c.archived) || campaigns[0];
+    if (firstCampaign?.id) {
+      const campaignSnap = await getDoc(doc(db, 'campaigns', firstCampaign.id));
+      if (campaignSnap.exists()) {
+        const data = campaignSnap.data();
+        seed = Array.isArray(data.users) ? data.users : [];
+      }
+    }
+  }
+
+  globalUsers = sanitizeUsers(seed);
+  await saveGlobalUsers();
+}
+
+async function migrateLegacyUsersToGlobal() {
+  const candidates = [];
+
+  // Legacy single-campaign storage
+  try {
+    const legacySnap = await getDoc(LEGACY_STATE_DOC);
+    if (legacySnap.exists()) {
+      const data = legacySnap.data();
+      if (Array.isArray(data.users)) candidates.push(...data.users);
+    }
+  } catch (e) {
+    console.error('Legacy users migration read error:', e);
+  }
+
+  // Existing campaign documents from pre-migration model
+  for (const c of campaigns) {
+    if (!c?.id) continue;
+    try {
+      const snap = await getDoc(doc(db, 'campaigns', c.id));
+      if (!snap.exists()) continue;
+      const data = snap.data();
+      if (Array.isArray(data.users) && data.users.length) candidates.push(...data.users);
+    } catch (e) {
+      console.error('Campaign users migration read error:', c.id, e);
+    }
+  }
+
+  if (!candidates.length) return;
+
+  const before = sanitizeUsers(globalUsers);
+  const merged = sanitizeUsers([...before, ...candidates]);
+  if (merged.length !== before.length) {
+    globalUsers = merged;
+    await saveGlobalUsers();
+  }
+}
+
+function startUsersRealtimeSync() {
+  if (_usersUnsubscribe) _usersUnsubscribe();
+  _usersUnsubscribe = onSnapshot(APP_USERS_DOC, snap => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    globalUsers = sanitizeUsers(data.users || []);
+
+    if (currentUser && !globalUsers.find(u => u.id === currentUser.id)) { doLogout(); return; }
+    if (currentUser) currentUser = globalUsers.find(u => u.id === currentUser.id) || currentUser;
+
+    renderUserList();
+    renderMaintLanding();
+    applyRoleUI();
+  }, err => {
+    console.error('Users onSnapshot error:', err);
+  });
+}
+
+async function ensureCampaignCatalog() {
+  const indexSnap = await getDoc(CAMPAIGNS_INDEX_DOC);
+  if (indexSnap.exists() && Array.isArray(indexSnap.data().campaigns) && indexSnap.data().campaigns.length) {
+    campaigns = indexSnap.data().campaigns;
+    return;
+  }
+
+  // First run migration path: if legacy state exists, move it to a default campaign.
+  const legacySnap = await getDoc(LEGACY_STATE_DOC);
+  const defaultId = 'principal';
+  const defaultName = 'Campana Principal';
+  const migrated = legacySnap.exists() ? normalizeState(legacySnap.data()) : emptyState();
+  const migratedUsers = sanitizeUsers(migrated.users || []);
+
+  await setDoc(doc(db, 'campaigns', defaultId), JSON.parse(JSON.stringify(migrated)));
+  campaigns = [{ id: defaultId, name: defaultName, archived: false }];
+  await saveCampaignCatalog();
+  await ensureGlobalUsers(migratedUsers);
+}
+
+function renderCampaignSelect() {
+  const sel = document.getElementById('login-campaign');
+  if (!sel) return;
+  const available = campaigns.filter(c => !c.archived);
+  sel.innerHTML = '';
+
+  if (!available.length) {
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = 'No hay campañas activas';
+    sel.appendChild(o);
+    sel.disabled = true;
+    applyCampaignBranding();
+    return;
+  }
+
+  sel.disabled = false;
+  available.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.name;
+    sel.appendChild(o);
+  });
+
+  const savedCampaign = sessionStorage.getItem('ljhd_campaign');
+  if (savedCampaign && available.some(c => c.id === savedCampaign)) sel.value = savedCampaign;
+  else sel.value = available[0].id;
+  applyCampaignBranding();
+}
+
+function getCurrentCampaignName() {
+  const c = campaigns.find(x => x.id === currentCampaignId);
+  return c ? c.name : '—';
+}
+
+function getSelectedCampaignName() {
+  const sel = document.getElementById('login-campaign');
+  if (!sel || sel.selectedIndex < 0) return '';
+  return sel.options[sel.selectedIndex]?.textContent?.trim() || '';
+}
+
+function getBrandName() {
+  const current = getCurrentCampaignName();
+  if (current && current !== '—') return current;
+  const selected = getSelectedCampaignName();
+  if (selected) return selected;
+  return 'Campana';
+}
+
+function applyCampaignBranding() {
+  const brand = getBrandName();
+  const login = document.getElementById('brand-login');
+  const header = document.getElementById('brand-header');
+  const landing = document.getElementById('brand-landing');
+  const spectator = document.getElementById('brand-spectator');
+  const loading = document.getElementById('brand-loading');
+
+  if (login) login.textContent = brand;
+  if (header) header.textContent = brand;
+  if (landing) landing.textContent = brand;
+  if (spectator) spectator.textContent = brand;
+  if (loading) loading.textContent = brand;
+  document.title = brand;
+}
+
+function getDeskSubtitle() {
+  if (!currentUser) return 'Mesa del Director de Juego';
+  return isDM() ? 'Mesa del Director de Juego' : 'Mesa de Jugador';
+}
+
+function applyDeskSubtitle() {
+  const loginSub = document.getElementById('brand-sub-login');
+  const headerSub = document.getElementById('brand-sub-header');
+  const landingSub = document.getElementById('brand-sub-landing');
+  const text = getDeskSubtitle();
+
+  // Login remains oriented to the DM desk before authentication.
+  if (loginSub) loginSub.textContent = 'Mesa del Director de Juego';
+  if (headerSub) headerSub.textContent = text;
+  if (landingSub) landingSub.textContent = text;
+}
 
 // ===========================
 //  PERSIST (Firestore)
 // ===========================
 function saveState() {
+  const stateDoc = getCurrentStateDoc();
+  if (!stateDoc) return;
   clearTimeout(_saveTimeout);
   setSaveIndicator('saving');
   _saveTimeout = setTimeout(async () => {
     try {
       _ignoreNext = true;
-      await setDoc(STATE_DOC, JSON.parse(JSON.stringify(state)));
+      await setDoc(stateDoc, JSON.parse(JSON.stringify(state)));
       setSaveIndicator('saved');
     } catch(e) { console.error('Firestore write:', e); setSaveIndicator(''); }
   }, 1500);
@@ -56,50 +324,40 @@ function setSaveIndicator(status) {
   }
 }
 
-async function loadState() {
+async function loadState(campaignId) {
+  currentCampaignId = campaignId;
+  const stateDoc = getCurrentStateDoc();
+  if (!stateDoc) return;
   showLoadingOverlay(true);
   try {
-    const snap = await getDoc(STATE_DOC);
+    const snap = await getDoc(stateDoc);
     if (snap.exists()) {
-      const data = snap.data();
-      state.sessions = data.sessions || [];
-      state.chars    = data.chars    || [];
-      state.enemies  = data.enemies  || [];
-      state.users    = data.users    || [];
-      state.estados  = data.estados  || [];
-      state.actos    = data.actos    || [];
-      state.eventos  = data.eventos  || [];
-      state.playerNotes = data.playerNotes || {};
+      state = normalizeState(snap.data());
+    } else {
+      state = emptyState();
     }
   } catch(e) { console.error('Firestore read:', e); }
-  if (!state.users.some(u => u.isDM)) {
-    state.users.push({ id: uid(), username: 'dm', passwordHash: hashPassword('dm1234'), isDM: true, charId: null });
-    await setDoc(STATE_DOC, JSON.parse(JSON.stringify(state)));
-  }
+  const badge = document.getElementById('campaign-badge');
+  if (badge) badge.textContent = getCurrentCampaignName();
+  applyCampaignBranding();
   showLoadingOverlay(false);
 }
 
 function startRealtimeSync() {
   if (_unsubscribe) _unsubscribe();
-  _unsubscribe = onSnapshot(STATE_DOC, snap => {
+  const stateDoc = getCurrentStateDoc();
+  if (!stateDoc) return;
+  _unsubscribe = onSnapshot(stateDoc, snap => {
     if (_ignoreNext) { _ignoreNext = false; return; }
     if (!snap.exists()) return;
-    const data = snap.data();
-    state.sessions = data.sessions || [];
-    state.chars    = data.chars    || [];
-    state.enemies  = data.enemies  || [];
-    state.users    = data.users    || [];
-    state.estados  = data.estados  || [];
-    state.actos    = data.actos    || [];
-    state.eventos  = data.eventos  || [];
-    state.playerNotes = data.playerNotes || {};
-    if (currentUser && !state.users.find(u => u.id === currentUser.id)) { doLogout(); return; }
-    if (currentUser) currentUser = state.users.find(u => u.id === currentUser.id) || currentUser;
+    state = normalizeState(snap.data());
+    if (currentUser && !globalUsers.find(u => u.id === currentUser.id)) { doLogout(); return; }
+    if (currentUser) currentUser = globalUsers.find(u => u.id === currentUser.id) || currentUser;
     rebuildSessionTabs();
     renderCharList();
     renderEnemyList();
     if (isDM()) {
-      renderUserList(); renderEstadoList(); renderActoList(); renderEventoList();
+      renderUserList(); renderEstadoList(); renderActoList(); renderEventoList(); renderCampaignList();
       document.querySelectorAll('.view[data-session-id]').forEach(view => {
         const s = state.sessions.find(x => x.id === view.dataset.sessionId);
         if (s) renderSessionActos(s, view);
@@ -142,45 +400,65 @@ function getSession(id) { return state.sessions.find(s => s.id === id); }
 // ===========================
 //  LOGIN / LOGOUT
 // ===========================
-function doLogin() {
+async function doLogin() {
+  const campaignId = document.getElementById('login-campaign')?.value || '';
   const username = document.getElementById('login-user').value.trim();
   const password = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-error');
+  if (!campaignId) { errEl.textContent = 'Selecciona una campana.'; return; }
   if (!username || !password) { errEl.textContent = 'Introduce usuario y contraseña.'; return; }
+
+  if (currentCampaignId !== campaignId) {
+    await loadState(campaignId);
+  }
+
   const hash = hashPassword(password);
-  const user = state.users.find(u => u.username === username && u.passwordHash === hash);
+  const user = globalUsers.find(u => u.username === username && u.passwordHash === hash);
   if (!user) { errEl.textContent = 'Usuario o contraseña incorrectos.'; return; }
   currentUser = user;
   errEl.textContent = '';
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('login-pass').value = '';
+  sessionStorage.setItem('ljhd_campaign', campaignId);
   sessionStorage.setItem('ljhd_user', user.id);
   applyRoleUI();
   rebuildSessionTabs();
   renderCharList();
   renderEnemyList();
   renderUserList();
+  renderCampaignList();
   
   // Show landing page first
   switchView('landing');
   
   startRealtimeSync(); // start AFTER view is rendered
+  startUsersRealtimeSync();
 }
 
 function doLogout() {
   if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
+  if (_usersUnsubscribe) { _usersUnsubscribe(); _usersUnsubscribe = null; }
+  sessionStorage.removeItem('ljhd_campaign');
   sessionStorage.removeItem('ljhd_user');
   currentUser = null;
+  state = emptyState();
   document.querySelectorAll('#main-content .view[data-session-id]').forEach(v => v.remove());
   document.getElementById('login-user').value = '';
   document.getElementById('login-pass').value = '';
   document.getElementById('login-error').textContent = '';
+  const campaignSel = document.getElementById('login-campaign');
+  if (campaignSel) campaignSel.value = campaigns.find(c => !c.archived)?.id || '';
+  const campaignBadge = document.getElementById('campaign-badge');
+  if (campaignBadge) campaignBadge.textContent = '—';
+  applyCampaignBranding();
+  applyDeskSubtitle();
   document.getElementById('login-screen').classList.remove('hidden');
 }
 
 function applyRoleUI() {
   const dm = isDM();
   const realDM = isRealDM();
+  applyDeskSubtitle();
   // Badge
   const badge = document.getElementById('user-badge');
   badge.innerHTML = realDM
@@ -324,6 +602,7 @@ function switchMaintSection(name, btn) {
     sesiones: '📖 Sesiones',
     enemigos: '👹 Tipos de Enemigos',
     usuarios: '👥 Usuarios',
+    campanas: '🗺 Campanas',
     estados: '⚡ Estados',
     actos: '📜 Actos',
     eventos: '🎲 Eventos Aleatorios',
@@ -352,6 +631,7 @@ function renderMaintLanding() {
     { id: 'estados', name: 'Estados', icon: '⚡', dmOnly: true },
     { id: 'personajes', name: 'Personajes', icon: '👤', alwaysShow: true },
     { id: 'usuarios', name: 'Usuarios', icon: '👥', dmOnly: true },
+    { id: 'campanas', name: 'Campanas', icon: '🗺', dmOnly: true },
     { id: 'backup', name: 'Copia de Seguridad', icon: '💾', dmOnly: true }
   ];
   
@@ -359,7 +639,8 @@ function renderMaintLanding() {
     personajes: state.chars.length,
     sesiones:   state.sessions.length,
     enemigos:   state.enemies.length,
-    usuarios:   state.users.length,
+    usuarios:   globalUsers.length,
+    campanas:   campaigns.filter(c => !c.archived).length,
     estados:    state.estados.length,
     actos:      state.actos.length,
     eventos:    state.eventos.length,
@@ -1235,7 +1516,18 @@ function renderCombatantList(session, clone) {
       <div class="dead-btns-corner ${dm?'':'player-hide'}">
         <button class="dead-btn">${c.dead?'♻':'☠'}</button>
         <button class="dead-btn" style="border-color:var(--ink-faded);color:var(--ink-faded)">✕</button>
-      </div>`;
+      </div>
+      ${dm && c.type==='enemy' && c.enemyId ? '<button class="enemy-info-btn" title="Ver ficha del enemigo">ⓘ</button>' : ''}`;
+
+    // Info button hover — DM only, enemy with template
+    if (dm && c.type === 'enemy' && c.enemyId) {
+      const infoBtn = card.querySelector('.enemy-info-btn');
+      if (infoBtn) {
+        infoBtn.addEventListener('mouseenter', () => showEnemyTooltip(c.enemyId, infoBtn));
+        infoBtn.addEventListener('mouseleave', scheduleHideEnemyTooltip);
+        infoBtn.addEventListener('click', e => { e.stopPropagation(); showEnemyTooltip(c.enemyId, infoBtn); });
+      }
+    }
 
     // Conditions
     const condWrap = card.querySelector('.conditions-wrap');
@@ -1284,6 +1576,71 @@ function renderCombatantList(session, clone) {
   }
   // Refresh chips so disabled state of PJ chips stays accurate
   renderCombatantChips(clone, session);
+}
+
+// ===========================
+//  ENEMY STAT TOOLTIP
+// ===========================
+let _tooltipHideTimer = null;
+
+function showEnemyTooltip(enemyId, anchor) {
+  const enemy = state.enemies.find(e => e.id === enemyId);
+  if (!enemy) return;
+  const tip = document.getElementById('enemy-stat-tooltip');
+  if (!tip) return;
+
+  clearTimeout(_tooltipHideTimer);
+
+  tip.querySelector('.est-name').textContent = enemy.name;
+  tip.querySelector('.est-pv').textContent = enemy.pv ?? '—';
+  tip.querySelector('.est-armor').textContent = enemy.armor || '—';
+  tip.querySelector('.est-fue').textContent = enemy.fue ?? '—';
+  tip.querySelector('.est-int').textContent = enemy.int ?? '—';
+  tip.querySelector('.est-car').textContent = enemy.car ?? '—';
+  tip.querySelector('.est-des').textContent = enemy.des ?? '—';
+
+  const attacksWrap = tip.querySelector('.est-attacks-wrap');
+  const attacksEl   = tip.querySelector('.est-attacks');
+  const attacks = (enemy.attacks || '').trim();
+  attacksEl.textContent = attacks;
+  attacksWrap.style.display = attacks ? '' : 'none';
+
+  const notesWrap = tip.querySelector('.est-notes-wrap');
+  const notesEl   = tip.querySelector('.est-notes');
+  const notes = (enemy.notes || '').trim();
+  notesEl.textContent = notes;
+  notesWrap.style.display = notes ? '' : 'none';
+
+  // Position near anchor
+  const rect = anchor.getBoundingClientRect();
+  const tipW = 280;
+  const margin = 8;
+  let left = rect.right + margin;
+  if (left + tipW > window.innerWidth - margin) left = rect.left - tipW - margin;
+  if (left < margin) left = margin;
+  let top = rect.top;
+  tip.style.left = left + 'px';
+  tip.style.top  = top + 'px';
+  tip.style.maxWidth = tipW + 'px';
+
+  tip.removeAttribute('aria-hidden');
+  tip.classList.add('visible');
+
+  // Keep visible when hovering the tooltip itself
+  tip.onmouseenter = () => clearTimeout(_tooltipHideTimer);
+  tip.onmouseleave = scheduleHideEnemyTooltip;
+}
+
+function scheduleHideEnemyTooltip() {
+  clearTimeout(_tooltipHideTimer);
+  _tooltipHideTimer = setTimeout(hideEnemyTooltip, 150);
+}
+
+function hideEnemyTooltip() {
+  const tip = document.getElementById('enemy-stat-tooltip');
+  if (!tip) return;
+  tip.classList.remove('visible');
+  tip.setAttribute('aria-hidden', 'true');
 }
 
 // ===========================
@@ -1980,7 +2337,8 @@ function renderCharSheetView(char) {
 function deleteChar(id) {
   showConfirm('¿Eliminar este personaje?', () => {
   // Disassociate any user linked to it
-  state.users.forEach(u=>{ if(u.charId===id) u.charId=null; });
+  globalUsers.forEach(u=>{ if(u.charId===id) u.charId=null; });
+  saveGlobalUsers();
   state.chars = state.chars.filter(c=>c.id!==id);
   saveState(); renderCharList(); renderUserList();
   showToast('Personaje eliminado', 'info');
@@ -2070,7 +2428,7 @@ function openUserModal(id) {
   editingUserId = id||null;
   document.getElementById('modal-user-title').textContent = id?'Editar Usuario':'Nuevo Usuario';
   document.getElementById('modal-user-error').textContent='';
-  const u = id ? state.users.find(x=>x.id===id) : null;
+  const u = id ? globalUsers.find(x=>x.id===id) : null;
   document.getElementById('uf-username').value = u?u.username:'';
   document.getElementById('uf-password').value = '';
   document.getElementById('uf-isdm').checked = u?u.isDM:false;
@@ -2093,13 +2451,13 @@ function saveUser() {
   const errEl = document.getElementById('modal-user-error');
   if (!username) { errEl.textContent='El nombre de usuario no puede estar vacío.'; return; }
   // Check duplicate username
-  const existing = state.users.find(u=>u.username===username && u.id!==editingUserId);
+  const existing = globalUsers.find(u=>u.username===username && u.id!==editingUserId);
   if (existing) { errEl.textContent='Ese nombre de usuario ya existe.'; return; }
   if (isNewUser && !password) { errEl.textContent='La contraseña es obligatoria para nuevos usuarios.'; return; }
   const isDMchecked = document.getElementById('uf-isdm').checked;
   const charId = isDMchecked ? null : (document.getElementById('uf-char').value || null);
   if (editingUserId) {
-    const u = state.users.find(x=>x.id===editingUserId);
+    const u = globalUsers.find(x=>x.id===editingUserId);
     u.username = username;
     if (password) u.passwordHash = hashPassword(password);
     u.isDM = isDMchecked;
@@ -2107,14 +2465,14 @@ function saveUser() {
     // Update currentUser if editing self
     if (currentUser && currentUser.id === editingUserId) { Object.assign(currentUser, u); applyRoleUI(); }
   } else {
-    state.users.push({ id:uid(), username, passwordHash:hashPassword(password), isDM:isDMchecked, charId });
+    globalUsers.push({ id:uid(), username, passwordHash:hashPassword(password), isDM:isDMchecked, charId });
   }
-  saveState(); closeModal('modal-user'); renderUserList();
+  saveGlobalUsers(); closeModal('modal-user'); renderUserList(); renderMaintLanding();
   showToast('Usuario guardado', 'success');
 }
 function renderUserList() {
   const list = document.getElementById('user-list'); list.innerHTML='';
-  state.users.forEach(u=>{
+  globalUsers.forEach(u=>{
     const linkedChar = u.charId ? state.chars.find(c=>c.id===u.charId) : null;
     const card=document.createElement('div'); card.className='entity-card';
     card.innerHTML=`
@@ -2130,15 +2488,111 @@ function renderUserList() {
   });
 }
 function deleteUser(id) {
-  const u = state.users.find(x=>x.id===id);
+  const u = globalUsers.find(x=>x.id===id);
   if (!u) return;
   if (u.id === currentUser?.id) { showToast('No puedes eliminar tu propia cuenta.', 'error'); return; }
-  if (u.isDM && state.users.filter(x=>x.isDM).length <= 1) { showToast('Debe existir al menos un Director de Juego.', 'error'); return; }
+  if (u.isDM && globalUsers.filter(x=>x.isDM).length <= 1) { showToast('Debe existir al menos un Director de Juego.', 'error'); return; }
   showConfirm(`¿Eliminar usuario "${u.username}"?`, () => {
-  state.users = state.users.filter(x=>x.id!==id);
-  saveState(); renderUserList();
+  globalUsers = globalUsers.filter(x=>x.id!==id);
+  saveGlobalUsers(); renderUserList(); renderMaintLanding();
   showToast('Usuario eliminado', 'info');
   }, 'Eliminar usuario');
+}
+
+// ===========================
+//  CAMPAIGNS MANAGEMENT
+// ===========================
+function renderCampaignList() {
+  const list = document.getElementById('campaign-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (!campaigns.length) {
+    list.innerHTML = '<div class="empty-state">No hay campanas registradas.</div>';
+    return;
+  }
+
+  campaigns.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'entity-card';
+    const isCurrent = c.id === currentCampaignId;
+    const activeCount = campaigns.filter(x => !x.archived).length;
+    const canArchive = !isCurrent && (!c.archived || activeCount > 1);
+    const status = c.archived ? 'Archivada' : 'Activa';
+
+    const switchBtn = c.archived
+      ? ''
+      : `<button class="btn btn-outline btn-sm" onclick="switchToCampaign('${c.id}')">Abrir</button>`;
+    const archiveBtn = canArchive
+      ? `<button class="btn btn-outline btn-sm" onclick="toggleCampaignArchived('${c.id}')">${c.archived ? 'Reactivar' : 'Archivar'}</button>`
+      : '';
+
+    card.innerHTML = `
+      <div class="entity-card-info">
+        <span class="entity-name">${c.name}${isCurrent ? ' · Actual' : ''}</span>
+        <span class="entity-meta">ID: ${c.id} · ${status}</span>
+      </div>
+      <div class="entity-actions">
+        ${switchBtn}
+        ${archiveBtn}
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+function openCampaignModal() {
+  document.getElementById('camp-name').value = '';
+  document.getElementById('camp-clone-current').checked = false;
+  document.getElementById('modal-campaign-error').textContent = '';
+  openModal('modal-campaign');
+}
+
+async function saveCampaign() {
+  const name = document.getElementById('camp-name').value.trim();
+  const cloneCurrent = document.getElementById('camp-clone-current').checked;
+  const err = document.getElementById('modal-campaign-error');
+  if (!name) { err.textContent = 'El nombre es obligatorio.'; return; }
+
+  const id = getUniqueCampaignId(name);
+  const nextState = cloneCurrent ? JSON.parse(JSON.stringify(state)) : emptyState();
+  nextState.users = [];
+
+  await setDoc(doc(db, 'campaigns', id), nextState);
+  campaigns.push({ id, name, archived: false });
+  await saveCampaignCatalog();
+
+  renderCampaignSelect();
+  renderCampaignList();
+  renderMaintLanding();
+  closeModal('modal-campaign');
+  showToast('Campana creada', 'success');
+}
+
+async function toggleCampaignArchived(campaignId) {
+  const c = campaigns.find(x => x.id === campaignId);
+  if (!c) return;
+  c.archived = !c.archived;
+  await saveCampaignCatalog();
+  renderCampaignSelect();
+  renderCampaignList();
+  renderMaintLanding();
+}
+
+async function switchToCampaign(campaignId) {
+  if (!campaigns.some(c => c.id === campaignId && !c.archived)) return;
+  if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
+  sessionStorage.setItem('ljhd_campaign', campaignId);
+  sessionStorage.removeItem('ljhd_user');
+  currentUser = null;
+  state = emptyState();
+  document.querySelectorAll('#main-content .view[data-session-id]').forEach(v => v.remove());
+  await loadState(campaignId);
+  renderCampaignSelect();
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-error').textContent = '';
+  document.getElementById('login-screen').classList.remove('hidden');
+  showToast('Selecciona un usuario para entrar en la campana', 'info');
 }
 
 // ===========================
@@ -2160,6 +2614,14 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){
     const open = document.querySelector('.modal-overlay.open');
     if(open) open.classList.remove('open');
+    hideEnemyTooltip();
+  }
+});
+// Click outside enemy tooltip hides it
+document.addEventListener('click', e=>{
+  const tip = document.getElementById('enemy-stat-tooltip');
+  if(tip && tip.classList.contains('visible') && !tip.contains(e.target) && !e.target.classList.contains('enemy-info-btn')){
+    hideEnemyTooltip();
   }
 });
 
@@ -2173,10 +2635,17 @@ function exportData() {
       if(!el.hasAttribute('readonly')) session[el.dataset.field]=el.value;
     });
   });
-  const json=JSON.stringify(state,null,2);
+  const payload = {
+    campaignId: currentCampaignId,
+    campaignName: getCurrentCampaignName(),
+    exportedAt: new Date().toISOString(),
+    data: state
+  };
+  const json=JSON.stringify(payload,null,2);
   const blob=new Blob([json],{type:'application/json'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='los_jueves_hay_dragones.json'; a.click();
+  const safeName = slugifyCampaignName(getBrandName()) || 'campana';
+  const a=document.createElement('a'); a.href=url; a.download=`${safeName}.json`; a.click();
   URL.revokeObjectURL(url);
   showToast('Copia exportada', 'success');
 }
@@ -2186,14 +2655,25 @@ function importData(event) {
   reader.onload=async e=>{
     try {
       const imported=JSON.parse(e.target.result);
-      state.sessions=imported.sessions||[];
-      state.chars=imported.chars||[];
-      state.enemies=imported.enemies||[];
-      state.users=imported.users||[];
+      const importedData = imported.data ? imported.data : imported;
+
+      // If backup includes legacy users, merge them into global users.
+      if (Array.isArray(importedData.users) && importedData.users.length) {
+        globalUsers = sanitizeUsers([...(globalUsers || []), ...importedData.users]);
+        await saveGlobalUsers();
+      }
+
+      state.sessions=importedData.sessions||[];
+      state.chars=importedData.chars||[];
+      state.enemies=importedData.enemies||[];
+      state.estados=importedData.estados||[];
+      state.actos=importedData.actos||[];
+      state.eventos=importedData.eventos||[];
+      state.playerNotes=importedData.playerNotes||{};
       _ignoreNext = true;
-      await setDoc(STATE_DOC, JSON.parse(JSON.stringify(state)));
+      await setDoc(getCurrentStateDoc(), JSON.parse(JSON.stringify(state)));
       rebuildSessionTabs();
-      renderCharList(); renderEnemyList(); renderUserList();
+      renderCharList(); renderEnemyList(); renderUserList(); renderCampaignList();
       switchView('maint');
       showToast('Datos importados correctamente', 'success');
     } catch(err) { alert('Error al importar: ' + err.message); }
@@ -2212,12 +2692,13 @@ function showLoadingOverlay(show) {
     el.id = 'loading-overlay';
     el.style.cssText = 'position:fixed;inset:0;z-index:3000;background:radial-gradient(ellipse at center,#2d1a00,#0d0700);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
     el.innerHTML = `
-      <div style="font-family:'UnifrakturMaguntia',cursive;color:#d4a017;font-size:2rem;text-shadow:0 0 20px rgba(180,130,0,.5);">Los Jueves Hay Dragones</div>
+      <div id="brand-loading" style="font-family:'UnifrakturMaguntia',cursive;color:#d4a017;font-size:2rem;text-shadow:0 0 20px rgba(180,130,0,.5);">Campana</div>
       <div style="font-family:'Cinzel',serif;color:#c9b07a;font-size:.65rem;letter-spacing:4px;text-transform:uppercase;">Conectando con la taberna…</div>
       <div style="width:48px;height:48px;border:3px solid #2d1a00;border-top-color:#d4a017;border-radius:50%;animation:spin .8s linear infinite;"></div>
       <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
     document.body.appendChild(el);
   }
+  applyCampaignBranding();
   el.style.display = show ? 'flex' : 'none';
 }
 
@@ -2236,7 +2717,8 @@ function renderSpectatorView(sessionId) {
 }
 
 function openSpectatorWindow(sessionId) {
-  const url = window.location.pathname + '?spectator=' + encodeURIComponent(sessionId);
+  const params = new URLSearchParams({ spectator: sessionId, campaign: currentCampaignId || '' });
+  const url = window.location.pathname + '?' + params.toString();
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
@@ -2245,30 +2727,55 @@ function openSpectatorWindow(sessionId) {
 // ===========================
 (async () => {
   // Spectator mode: show initiative-only view without login
-  const spectatorId = new URLSearchParams(window.location.search).get('spectator');
+  const qs = new URLSearchParams(window.location.search);
+  const spectatorId = qs.get('spectator');
+  const spectatorCampaign = qs.get('campaign');
   if (spectatorId) {
+    if (!spectatorCampaign) {
+      alert('Falta parametro de campana en modo espectador.');
+      return;
+    }
     document.body.classList.add('spectator-mode');
     const sv = document.getElementById('spectator-view');
     sv.style.display = 'flex';
-    await loadState();
+    await ensureCampaignCatalog();
+    await loadState(spectatorCampaign);
     renderSpectatorView(spectatorId);
-    onSnapshot(STATE_DOC, snap => {
+    onSnapshot(getCurrentStateDoc(), snap => {
       if (!snap.exists()) return;
-      const data = snap.data();
-      state.sessions = data.sessions || [];
-      state.chars    = data.chars    || [];
-      state.enemies  = data.enemies  || [];
-      state.estados  = data.estados  || [];
+      state = normalizeState(snap.data());
       renderSpectatorView(spectatorId);
     }, err => console.error('Spectator sync error:', err));
     return;
   }
 
-  await loadState();
+  await ensureCampaignCatalog();
+  await ensureGlobalUsers();
+  await migrateLegacyUsersToGlobal();
+  renderCampaignSelect();
+  applyDeskSubtitle();
+
+  const campaignSelect = document.getElementById('login-campaign');
+  if (campaignSelect) {
+    campaignSelect.addEventListener('change', async () => {
+      const selected = campaignSelect.value;
+      if (!selected) return;
+      sessionStorage.setItem('ljhd_campaign', selected);
+      await loadState(selected);
+      document.getElementById('login-error').textContent = '';
+    });
+    if (campaignSelect.value) await loadState(campaignSelect.value);
+  }
+
   // Restore session after page refresh
+  const savedCampaign = sessionStorage.getItem('ljhd_campaign');
   const savedId = sessionStorage.getItem('ljhd_user');
-  if (savedId) {
-    const user = state.users.find(u => u.id === savedId);
+  if (savedCampaign && campaigns.some(c => c.id === savedCampaign && !c.archived)) {
+    await loadState(savedCampaign);
+    if (campaignSelect) campaignSelect.value = savedCampaign;
+  }
+  if (savedCampaign && savedId) {
+    const user = globalUsers.find(u => u.id === savedId);
     if (user) {
       currentUser = user;
       applyRoleUI();
@@ -2276,14 +2783,17 @@ function openSpectatorWindow(sessionId) {
       renderCharList();
       renderEnemyList();
       renderUserList();
+      renderCampaignList();
       
       // Show landing page
       switchView('landing');
       
       document.getElementById('login-screen').classList.add('hidden');
       startRealtimeSync(); // start AFTER view is rendered
+      startUsersRealtimeSync();
     }
   }
+  renderCampaignList();
 })();
 
 function filterList(query, listId) {
@@ -2339,6 +2849,7 @@ _g.openEnemyModal        = openEnemyModal;
 _g.saveEnemy             = saveEnemy;
 _g.deleteEnemy           = deleteEnemy;
 _g.cloneEnemy            = cloneEnemy;
+_g.hideEnemyTooltip      = hideEnemyTooltip;
 _g.openUserModal         = openUserModal;
 _g.saveUser              = saveUser;
 _g.deleteUser            = deleteUser;
@@ -2377,6 +2888,10 @@ _g.openSessionEdit           = openSessionEdit;
 _g.renderSessionEditView     = renderSessionEditView;
 _g.toggleEditEnemy           = toggleEditEnemy;
 _g.moveActo                  = moveActo;
+_g.openCampaignModal         = openCampaignModal;
+_g.saveCampaign              = saveCampaign;
+_g.toggleCampaignArchived    = toggleCampaignArchived;
+_g.switchToCampaign          = switchToCampaign;
 _g.showToast                 = showToast;
 _g.showConfirm               = showConfirm;
 _g.filterList                = filterList;
