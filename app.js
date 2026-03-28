@@ -601,9 +601,11 @@ function savePrepareCombats() {
 
 
 function openNewSessionModal() {
-  document.getElementById('new-session-name').value = `Sesión ${state.sessions.length + 1}`;
+  const input = document.getElementById('new-session-name');
+  input.value = `Sesión ${state.sessions.length + 1}`;
+  input.onkeydown = e => { if (e.key === 'Enter') createSession(); };
   openModal('modal-new-session');
-  setTimeout(() => document.getElementById('new-session-name').select(), 80);
+  setTimeout(() => input.select(), 80);
 }
 
 function createSession() {
