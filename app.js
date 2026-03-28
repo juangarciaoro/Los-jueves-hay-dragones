@@ -20,7 +20,7 @@ const STATE_DOC = doc(db, 'campaign', 'state');
 // ===========================
 //  STATE
 // ===========================
-let state = { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[] };
+let state = { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
 let currentUser  = null;
 let _saveTimeout = null;
 let _unsubscribe = null;
@@ -53,6 +53,7 @@ async function loadState() {
       state.estados  = data.estados  || [];
       state.actos    = data.actos    || [];
       state.eventos  = data.eventos  || [];
+      state.playerNotes = data.playerNotes || {};
     }
   } catch(e) { console.error('Firestore read:', e); }
   if (!state.users.some(u => u.isDM)) {
@@ -75,6 +76,7 @@ function startRealtimeSync() {
     state.estados  = data.estados  || [];
     state.actos    = data.actos    || [];
     state.eventos  = data.eventos  || [];
+    state.playerNotes = data.playerNotes || {};
     if (currentUser && !state.users.find(u => u.id === currentUser.id)) { doLogout(); return; }
     if (currentUser) currentUser = state.users.find(u => u.id === currentUser.id) || currentUser;
     rebuildSessionTabs();
@@ -658,15 +660,12 @@ function buildSessionView(session) {
     // Show player notes panel
     const pnw = clone.querySelector('.player-notes-panel-wrap');
     if (pnw) pnw.style.display = '';
-    // Bind player notes (per-user, per-session key)
+    // Bind player notes (global per-user, shared across all sessions)
     const pnArea = clone.querySelector('[data-field="player_note"]');
     if (pnArea && currentUser) {
-      const noteKey = `pnote_${session.id}_${currentUser.id}`;
-      if (!session.playerNotes) session.playerNotes = {};
-      pnArea.value = session.playerNotes[currentUser.id] || '';
+      pnArea.value = state.playerNotes[currentUser.id] || '';
       pnArea.addEventListener('input', () => {
-        if (!session.playerNotes) session.playerNotes = {};
-        session.playerNotes[currentUser.id] = pnArea.value;
+        state.playerNotes[currentUser.id] = pnArea.value;
         saveState();
       });
     }
