@@ -651,10 +651,6 @@ function renderSessionList() {
   const pageSessions = sortedSessions.slice(start, end);
 
   pageSessions.forEach(session => {
-    const activeView = document.querySelector('#main-content .view.active');
-    const isActive = activeView && (activeView.dataset.sessionId === session.id || activeView.id === 'view-' + session.id);
-    const icon = isActive ? '🔴' : '⚪';
-    
     const card = document.createElement('div');
     card.className = 'entity-card';
     
@@ -676,7 +672,6 @@ function renderSessionList() {
     const countersHtml = isDM() ? `<span class="session-card-counters">${actosCount} acto${actosCount!==1?'s':''} &middot; ${eventosCount} evento${eventosCount!==1?'s':''}</span>` : '';
     card.innerHTML = `
       <div class="entity-card-info">
-        <span style="font-size:1.2rem;margin-right:8px">${icon}</span>
         <span class="entity-name">${session.name}</span>
         <span class="entity-meta">${(session.title || '')}</span>
         ${countersHtml}
