@@ -687,11 +687,82 @@ function buildSessionView(session) {
     clone.querySelector('.add-combatant-btn').addEventListener('click', () => addCombatantToSession(session, clone));
   }
   renderCombatantList(session, clone);
-  if (dm) renderSessionActos(session, clone);
+  if (dm) {
+    renderSessionActos(session, clone);
+    wireSessionEventos(session, clone);
+    const spectatorBtn = clone.querySelector('.btn-spectator');
+    if (spectatorBtn) spectatorBtn.addEventListener('click', () => openSpectatorWindow(session.id));
+  }
 
   console.log('[buildSessionView] appending clone to main-content. Clone id:', clone.id, 'display before:', clone.style.display, 'classList:', clone.className);
   document.getElementById('main-content').appendChild(clone);
   console.log('[buildSessionView] view appended successfully');
+}
+
+// ===========================
+//  SESSION EVENTOS
+// ===========================
+function wireSessionEventos(session, clone) {
+  const COLORS = { Tensión:'#c86e1e', Combate:'#a02020', Social:'#3ca050', Entorno:'#3a7ab8' };
+
+  function getOpenActo() {
+    // Open acto has its toggle set to the ▼ glyph
+    const openHeader = Array.from(clone.querySelectorAll('.actos-accordion .acto-header'))
+      .find(h => h.querySelector('.acto-toggle').textContent.trim() === '\u25bc');
+    if (!openHeader) return null;
+    const titleText = openHeader.querySelector('.acto-title').textContent.trim();
+    return state.actos.find(a => a.sessionId === session.id && a.title === titleText) || null;
+  }
+
+  function showEvento(evento) {
+    const empty = clone.querySelector('.evr-empty');
+    const content = clone.querySelector('.evr-content');
+    if (!evento) {
+      empty.style.display = '';
+      content.style.display = 'none';
+      empty.textContent = 'No hay eventos de esta categoría para el acto seleccionado.';
+      return;
+    }
+    empty.style.display = 'none';
+    content.style.display = '';
+    const color = COLORS[evento.categoria] || 'var(--text-muted)';
+    const badge = clone.querySelector('.evr-cat-badge');
+    badge.textContent = evento.categoria;
+    badge.style.color = color;
+    clone.querySelector('.evr-title').textContent = evento.title;
+    clone.querySelector('.evr-public').value = evento.public || '';
+    clone.querySelector('.evr-private').value = evento.private || '';
+  }
+
+  clone.querySelectorAll('.evt-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.cat;
+      const acto = getOpenActo();
+      if (!acto) {
+        const empty = clone.querySelector('.evr-empty');
+        const content = clone.querySelector('.evr-content');
+        empty.style.display = '';
+        content.style.display = 'none';
+        empty.textContent = 'Despliega un acto primero.';
+        return;
+      }
+      let pool = state.eventos.filter(e => e.sessionId === session.id && e.actoId === acto.id);
+      if (cat !== 'Todos') pool = pool.filter(e => e.categoria === cat);
+      if (!pool.length) { showEvento(null); return; }
+      showEvento(pool[Math.floor(Math.random() * pool.length)]);
+    });
+  });
+
+  clone.querySelector('.evr-pub-btn').addEventListener('click', () => {
+    const text = clone.querySelector('.evr-public').value;
+    if (!text) return;
+    const diary = clone.querySelector('[data-field="diary"]');
+    if (diary) {
+      diary.value = diary.value ? diary.value + '\n\n' + text : text;
+      session.diary = diary.value;
+      saveState();
+    }
+  });
 }
 
 // ===========================
@@ -761,8 +832,16 @@ function renderSessionActos(session, clone) {
 
     header.addEventListener('click', () => {
       const open = body.style.display !== 'none';
-      body.style.display = open ? 'none' : '';
-      header.querySelector('.acto-toggle').innerHTML = open ? '&#9658;' : '&#9660;';
+      // Collapse all other items first
+      accordion.querySelectorAll('.acto-body').forEach((b, _, all) => {
+        b.style.display = 'none';
+        b.previousElementSibling.querySelector('.acto-toggle').innerHTML = '&#9658;';
+      });
+      // Toggle clicked item
+      if (!open) {
+        body.style.display = '';
+        header.querySelector('.acto-toggle').innerHTML = '&#9660;';
+      }
     });
     item.appendChild(header);
     item.appendChild(body);
@@ -1164,6 +1243,10 @@ function saveActo() {
   saveState();
   closeModal('modal-acto');
   renderActoList();
+  document.querySelectorAll('.view[data-session-id]').forEach(view => {
+    const s = state.sessions.find(x => x.id === view.dataset.sessionId);
+    if (s) renderSessionActos(s, view);
+  });
 }
 
 function deleteActo(id) {
@@ -1173,6 +1256,10 @@ function deleteActo(id) {
   state.actos.splice(idx, 1);
   saveState();
   renderActoList();
+  document.querySelectorAll('.view[data-session-id]').forEach(view => {
+    const s = state.sessions.find(x => x.id === view.dataset.sessionId);
+    if (s) renderSessionActos(s, view);
+  });
 }
 
 // ===========================
@@ -1826,9 +1913,48 @@ function showLoadingOverlay(show) {
 }
 
 // ===========================
+//  SPECTATOR
+// ===========================
+function renderSpectatorView(sessionId) {
+  const container = document.getElementById('spectator-view');
+  if (!container) return;
+  const session = state.sessions.find(s => s.id === sessionId);
+  container.querySelector('.spectator-session-name').textContent =
+    session ? (session.name || 'Iniciativa') : 'Sesión no encontrada';
+  container.querySelector('.spectator-round-num').textContent =
+    session ? (session.round || 1) : '—';
+  if (session) renderCombatantList(session, container);
+}
+
+function openSpectatorWindow(sessionId) {
+  const url = window.location.pathname + '?spectator=' + encodeURIComponent(sessionId);
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+// ===========================
 //  INIT
 // ===========================
 (async () => {
+  // Spectator mode: show initiative-only view without login
+  const spectatorId = new URLSearchParams(window.location.search).get('spectator');
+  if (spectatorId) {
+    document.body.classList.add('spectator-mode');
+    const sv = document.getElementById('spectator-view');
+    sv.style.display = 'flex';
+    await loadState();
+    renderSpectatorView(spectatorId);
+    onSnapshot(STATE_DOC, snap => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      state.sessions = data.sessions || [];
+      state.chars    = data.chars    || [];
+      state.enemies  = data.enemies  || [];
+      state.estados  = data.estados  || [];
+      renderSpectatorView(spectatorId);
+    }, err => console.error('Spectator sync error:', err));
+    return;
+  }
+
   await loadState();
   // Restore session after page refresh
   const savedId = sessionStorage.getItem('ljhd_user');
@@ -1901,3 +2027,4 @@ _g.openEventoModal       = openEventoModal;
 _g.saveEvento            = saveEvento;
 _g.deleteEvento          = deleteEvento;
 _g.onEventoSessionChange = onEventoSessionChange;
+_g.openSpectatorWindow   = openSpectatorWindow;

@@ -181,10 +181,42 @@
         <div class="actos-accordion"></div>
       </div>
     </div>
-    <!-- BOTONES DE HERRAMIENTAS (columna izquierda, fila 2) -->
+    <!-- EVENTOS (solo DM, fila 2) -->
+    <div class="panel dm-only-ctrl" id="panel-eventos-session">
+      <div class="panel-header">🎲 Eventos Aleatorios</div>
+      <div class="panel-body">
+        <div class="eventos-session-wrap">
+          <div class="eventos-cat-btns">
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Tensión">⚡ Tensión</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Combate">⚔ Combate</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Social">💬 Social</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Entorno">🌿 Entorno</button>
+            <button class="btn btn-gold btn-sm evt-cat-btn" data-cat="Todos">🎲 Todos</button>
+          </div>
+          <div class="eventos-session-result">
+            <div class="evr-empty">Selecciona una categoría y asegúrate de tener un acto desplegado.</div>
+            <div class="evr-content" style="display:none">
+              <div class="evr-header">
+                <span class="evr-cat-badge"></span>
+                <span class="evr-title"></span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px">
+                <label class="flabel" style="margin:0">Contenido Público</label>
+                <button class="btn btn-outline btn-sm evr-pub-btn">📢 Publicar</button>
+              </div>
+              <textarea class="note-area evr-public" style="min-height:80px" readonly></textarea>
+              <label class="flabel">Contenido Privado</label>
+              <textarea class="note-area evr-private" style="min-height:80px" readonly></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- BOTONES DE HERRAMIENTAS (columna izquierda, fila 3) -->
     <div class="session-tool-btns">
       <button class="tool-popup-btn btn-popup-notes" title="Notas">📝</button>
       <button class="tool-popup-btn btn-popup-dice" title="Dados">🎲</button>
+      <button class="tool-popup-btn dm-only-ctrl btn-spectator" title="Abrir vista para jugadores">🖥</button>
     </div>
     <!-- INICIATIVA (columna derecha, fila 2) -->
     <div class="panel" id="panel-init">
@@ -505,6 +537,20 @@
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-evento')">Cancelar</button>
       <button class="btn btn-gold btn-sm" onclick="saveEvento()">Guardar Evento</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== VISTA ESPECTADOR (sin login, para compartir pantalla) ===== -->
+<div id="spectator-view" style="display:none">
+  <div class="spectator-header">
+    <div>
+      <div class="spectator-session-name"></div>
+      <div class="spectator-round">Ronda <span class="spectator-round-num">1</span></div>
+    </div>
+    <div class="spectator-logo">Los Jueves Hay Dragones</div>
+  </div>
+  <div class="spectator-body">
+    <div class="combatant-list"></div>
   </div>
 </div>
 
