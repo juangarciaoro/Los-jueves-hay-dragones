@@ -472,7 +472,9 @@ function renderSessionEditView() {
   const wrap = document.getElementById('session-edit-content');
   if (!session || !wrap) return;
 
-  const actos = state.actos.filter(a => a.sessionId === session.id);
+  const actos = state.actos
+    .filter(a => a.sessionId === session.id)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   let html = `
     <div class="se-header">
@@ -496,9 +498,13 @@ function renderSessionEditView() {
     // Acto header
     const actoHeader = document.createElement('div');
     actoHeader.className = 'se-acto-header';
+    const isFirst = actos.indexOf(acto) === 0;
+    const isLast  = actos.indexOf(acto) === actos.length - 1;
     actoHeader.innerHTML = `
       <span class="se-acto-title">📜 ${acto.title}</span>
       <span style="font-family:'Crimson Text',serif;font-size:.82rem;color:var(--text-muted)">${eventos.length} evento${eventos.length!==1?'s':''}</span>
+      <button class="btn btn-outline btn-sm se-reorder-btn" ${isFirst?'disabled':''} onclick="moveActo('${acto.id}',-1)">▲</button>
+      <button class="btn btn-outline btn-sm se-reorder-btn" ${isLast?'disabled':''} onclick="moveActo('${acto.id}',1)">▼</button>
       <button class="btn btn-outline btn-sm" onclick="openActoModal('${acto.id}','${session.id}')">✎ Editar</button>
       <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">✕</button>`;
     block.appendChild(actoHeader);
@@ -562,6 +568,24 @@ function renderSessionEditView() {
   }
   enemiesSection.appendChild(eChips);
   wrap.appendChild(enemiesSection);
+}
+
+function moveActo(actoId, dir) {
+  const acto = state.actos.find(a => a.id === actoId);
+  if (!acto) return;
+  const siblings = state.actos
+    .filter(a => a.sessionId === acto.sessionId)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  // Normalise orders first
+  siblings.forEach((a, i) => { a.order = i; });
+  const idx = siblings.indexOf(acto);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= siblings.length) return;
+  siblings[idx].order   = swapIdx;
+  siblings[swapIdx].order = idx;
+  saveState();
+  renderActoList();
+  if (_editSessionId) renderSessionEditView();
 }
 
 function toggleEditEnemy(enemyId) {
@@ -647,11 +671,15 @@ function renderSessionList() {
          <button class="btn btn-danger btn-sm" onclick="deleteSession('${session.id}')">Borrar</button>`
       : `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>`;
     
+    const actosCount  = state.actos.filter(a => a.sessionId === session.id).length;
+    const eventosCount = state.eventos.filter(e => e.sessionId === session.id).length;
+    const countersHtml = isDM() ? `<span class="session-card-counters">${actosCount} acto${actosCount!==1?'s':''} &middot; ${eventosCount} evento${eventosCount!==1?'s':''}</span>` : '';
     card.innerHTML = `
       <div class="entity-card-info">
         <span style="font-size:1.2rem;margin-right:8px">${icon}</span>
         <span class="entity-name">${session.name}</span>
         <span class="entity-meta">${(session.title || '')}</span>
+        ${countersHtml}
       </div>
       <div class="entity-actions">
         ${actionBtns}
@@ -1417,7 +1445,9 @@ function renderActoList() {
 
   sessionIds.forEach(sid => {
     const session = state.sessions.find(s => s.id === sid);
-    const actos = state.actos.filter(a => a.sessionId === sid);
+    const actos = state.actos
+      .filter(a => a.sessionId === sid)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     // Session node
     const sessionNode = document.createElement('div');
@@ -1433,7 +1463,9 @@ function renderActoList() {
     });
     sessionNode.appendChild(sessionHeader);
 
-    actos.forEach(a => {
+    actos.forEach((a, idx) => {
+      const isFirst = idx === 0;
+      const isLast  = idx === actos.length - 1;
       const row = document.createElement('div');
       row.className = 'tree-leaf entity-card';
       row.innerHTML = `
@@ -1441,8 +1473,10 @@ function renderActoList() {
           <span class="entity-name">${a.title}</span>
         </div>
         <div class="entity-actions">
-          <button class="btn btn-outline btn-sm" onclick="openActoModal('${a.id}')">✎ Editar</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteActo('${a.id}')">✕ Eliminar</button>
+          <button class="btn btn-outline btn-sm se-reorder-btn" ${isFirst?'disabled':''} onclick="moveActo('${a.id}',-1)">▲</button>
+          <button class="btn btn-outline btn-sm se-reorder-btn" ${isLast?'disabled':''} onclick="moveActo('${a.id}',1)">▼</button>
+          <button class="btn btn-outline btn-sm" onclick="openActoModal('${a.id}')">&#9998; Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteActo('${a.id}')">&#x2715; Eliminar</button>
         </div>`;
       childWrap.appendChild(row);
     });
@@ -1486,7 +1520,9 @@ function saveActo() {
     const idx = state.actos.findIndex(a => a.id === editingActoId);
     if (idx !== -1) state.actos[idx] = { id: editingActoId, ...obj };
   } else {
-    state.actos.push({ id: uid(), ...obj });
+    const maxOrder = state.actos.filter(a => a.sessionId === obj.sessionId)
+      .reduce((m, a) => Math.max(m, a.order ?? 0), -1);
+    state.actos.push({ id: uid(), order: maxOrder + 1, ...obj });
   }
   saveState();
   closeModal('modal-acto');
@@ -2338,6 +2374,7 @@ _g.toggleSessionPublished    = toggleSessionPublished;
 _g.openSessionEdit           = openSessionEdit;
 _g.renderSessionEditView     = renderSessionEditView;
 _g.toggleEditEnemy           = toggleEditEnemy;
+_g.moveActo                  = moveActo;
 _g.showToast                 = showToast;
 _g.showConfirm               = showConfirm;
 _g.filterList                = filterList;

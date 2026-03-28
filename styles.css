@@ -1000,6 +1000,15 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   border-left:3px solid rgba(80,70,50,0.4);
   opacity:.82;
 }
+.session-card-counters{
+  font-family:'Crimson Text',serif;font-size:.78rem;
+  color:var(--text-muted);margin-left:6px;
+  white-space:nowrap;
+}
+.se-reorder-btn{
+  padding:1px 7px!important;font-size:.75rem!important;
+  min-width:0!important;line-height:1.4!important;
+}
 /* ===== TOAST ===== */
 #toast{
   position:fixed;bottom:28px;right:28px;z-index:9999;
