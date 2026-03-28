@@ -470,6 +470,7 @@ function renderSessionList() {
     const dm = isDM();
     const actionBtns = dm
       ? `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>
+         <button class="btn btn-outline btn-sm" onclick="openPrepareCombatsModal('${session.id}')">⚔ Combates</button>
          <button class="btn btn-danger btn-sm" onclick="deleteSession('${session.id}')">Borrar</button>`
       : `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>`;
     
@@ -513,6 +514,65 @@ function deleteSession(id) {
     switchView('maint');
   }
 }
+
+// ===========================
+//  PREPARE COMBATS MODAL
+// ===========================
+let _prepareCombatsSessionId = null;
+let _prepareCombatsSelected  = new Set();
+
+function openPrepareCombatsModal(sessionId) {
+  const session = state.sessions.find(s => s.id === sessionId);
+  if (!session) return;
+  _prepareCombatsSessionId = sessionId;
+  _prepareCombatsSelected  = new Set(session.allowedEnemies || []);
+
+  const title = document.getElementById('modal-prepare-combats-title');
+  if (title) title.textContent = `⚔ Preparar Combates — ${session.name}`;
+
+  const wrap  = document.getElementById('prepare-combats-chips');
+  const empty = document.getElementById('prepare-combats-empty');
+  wrap.innerHTML = '';
+
+  if (!state.enemies.length) {
+    wrap.style.display   = 'none';
+    empty.style.display  = '';
+  } else {
+    wrap.style.display   = '';
+    empty.style.display  = 'none';
+    state.enemies.forEach(enemy => {
+      const chip = document.createElement('button');
+      chip.className = 'chip-enemy-prep' + (_prepareCombatsSelected.has(enemy.id) ? ' selected' : '');
+      chip.textContent = enemy.name;
+      chip.dataset.enemyId = enemy.id;
+      chip.onclick = () => {
+        if (_prepareCombatsSelected.has(enemy.id)) {
+          _prepareCombatsSelected.delete(enemy.id);
+          chip.classList.remove('selected');
+        } else {
+          _prepareCombatsSelected.add(enemy.id);
+          chip.classList.add('selected');
+        }
+      };
+      wrap.appendChild(chip);
+    });
+  }
+
+  openModal('modal-prepare-combats');
+}
+
+function savePrepareCombats() {
+  const session = state.sessions.find(s => s.id === _prepareCombatsSessionId);
+  if (!session) { closeModal('modal-prepare-combats'); return; }
+  session.allowedEnemies = [..._prepareCombatsSelected];
+  saveState();
+  closeModal('modal-prepare-combats');
+  // Refresh chips in any open session view
+  const container = document.getElementById('view-' + session.id);
+  if (container) renderCombatantChips(container, session);
+}
+
+
 
 function openNewSessionModal() {
   document.getElementById('new-session-name').value = `Sesión ${state.sessions.length + 1}`;
@@ -898,7 +958,11 @@ function renderCombatantChips(clone, session) {
     pjWrap.appendChild(chip);
   });
 
-  state.enemies.forEach(enemy => {
+  const visibleEnemies = Array.isArray(session.allowedEnemies)
+    ? state.enemies.filter(e => session.allowedEnemies.includes(e.id))
+    : state.enemies;
+
+  visibleEnemies.forEach(enemy => {
     const chip = document.createElement('button');
     chip.className = 'chip-enemy';
     chip.textContent = enemy.name;
@@ -2028,3 +2092,5 @@ _g.saveEvento            = saveEvento;
 _g.deleteEvento          = deleteEvento;
 _g.onEventoSessionChange = onEventoSessionChange;
 _g.openSpectatorWindow   = openSpectatorWindow;
+_g.openPrepareCombatsModal = openPrepareCombatsModal;
+_g.savePrepareCombats      = savePrepareCombats;

@@ -540,6 +540,22 @@
   </div>
 </div>
 
+<!-- PREPARAR COMBATES -->
+<div id="modal-prepare-combats" class="modal-overlay">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header"><span id="modal-prepare-combats-title">⚔ Preparar Combates</span><button class="modal-close" onclick="closeModal('modal-prepare-combats')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-family:'Crimson Text',serif;font-size:.95rem;color:var(--text-muted);margin-bottom:14px">Selecciona los enemigos que aparecerán en esta sesión. Solo estos estarán disponibles en el panel de combate.</p>
+      <div id="prepare-combats-chips" class="combatant-chips-row" style="gap:8px;flex-wrap:wrap;min-height:40px"></div>
+      <div id="prepare-combats-empty" style="display:none;font-family:'Crimson Text',serif;font-style:italic;color:var(--text-muted);font-size:.9rem">No hay enemigos definidos. Crea enemigos en la sección de Mantenimiento.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-prepare-combats')">Cancelar</button>
+      <button class="btn btn-gold btn-sm" onclick="savePrepareCombats()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== VISTA ESPECTADOR (sin login, para compartir pantalla) ===== -->
 <div id="spectator-view" style="display:none">
   <div class="spectator-header">

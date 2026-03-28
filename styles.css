@@ -579,6 +579,16 @@ body.spectator-mode #main-content { display:none !important; }
   background:rgba(122,26,26,0.18);border:1px solid rgba(176,40,40,0.45);color:var(--blood-light);
 }
 .chip-enemy:hover{background:rgba(122,26,26,0.32);}
+.chip-enemy-prep{
+  font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.5px;padding:5px 12px;
+  border-radius:20px;cursor:pointer;transition:all var(--t);
+  background:rgba(122,26,26,0.12);border:1px solid rgba(176,40,40,0.35);color:var(--text-muted);
+}
+.chip-enemy-prep:hover{background:rgba(122,26,26,0.28);border-color:rgba(176,40,40,0.65);color:var(--blood-light);}
+.chip-enemy-prep.selected{
+  background:rgba(122,26,26,0.38);border:1px solid rgba(176,40,40,0.85);
+  color:var(--blood-light);box-shadow:0 0 8px rgba(176,40,40,0.3);
+}
 .combatant-section-label{
   font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:1.5px;
   color:var(--text-muted);text-transform:uppercase;margin-bottom:2px;
