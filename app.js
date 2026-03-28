@@ -333,12 +333,26 @@ function renderMaintLanding() {
     { id: 'backup', name: 'Copia de Seguridad', icon: '💾', dmOnly: true }
   ];
   
+  const counts = {
+    personajes: state.chars.length,
+    sesiones:   state.sessions.length,
+    enemigos:   state.enemies.length,
+    usuarios:   state.users.length,
+    estados:    state.estados.length,
+    actos:      state.actos.length,
+    eventos:    state.eventos.length,
+  };
+
   sections.forEach(section => {
     if (section.dmOnly && !isDM()) return;
-    
+
+    const count = counts[section.id];
+    const badge = (count !== undefined)
+      ? `<span style="font-family:'Cinzel',serif;font-size:.58rem;color:var(--text-muted);letter-spacing:1px;">(${count})</span>`
+      : '';
     const btn = document.createElement('button');
     btn.className = 'landing-card';
-    btn.innerHTML = `<span class="card-icon">${section.icon}</span><span class="card-label">${section.name}</span>`;
+    btn.innerHTML = `<span class="card-icon">${section.icon}</span><span class="card-label">${section.name} ${badge}</span>`;
     btn.onclick = () => {
       const maintBtn = document.querySelector(`.maint-tab[data-section="${section.id}"]`);
       switchMaintSection(section.id, maintBtn);
