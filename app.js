@@ -533,17 +533,16 @@ function renderSessionList() {
 }
 
 function deleteSession(id) {
-  if (!confirm('¿Eliminar sesión? Esta acción no se puede deshacer.')) return;
+  showConfirm('¿Eliminar sesión? Esta acción no se puede deshacer.', () => {
   const idx = state.sessions.findIndex(s => s.id === id);
   if (idx === -1) return;
   const wasActive = document.querySelector('.view.active')?.dataset.sessionId === id;
   state.sessions.splice(idx, 1);
   saveState();
   rebuildSessionTabs();
-  if (wasActive) {
-    switchView('maint');
-  }
+  if (wasActive) switchView('maint');
   showToast('Sesión eliminada', 'info');
+  }, 'Eliminar sesión');
 }
 
 // ===========================
@@ -1356,7 +1355,7 @@ function saveActo() {
 }
 
 function deleteActo(id) {
-  if (!confirm('¿Eliminar acto? Los eventos asociados perderán su referencia.')) return;
+  showConfirm('¿Eliminar acto? Los eventos asociados perderán su referencia.', () => {
   const idx = state.actos.findIndex(a => a.id === id);
   if (idx === -1) return;
   state.actos.splice(idx, 1);
@@ -1366,6 +1365,7 @@ function deleteActo(id) {
     const s = state.sessions.find(x => x.id === view.dataset.sessionId);
     if (s) renderSessionActos(s, view);
   });
+  }, 'Eliminar acto');
 }
 
 // ===========================
@@ -1793,12 +1793,13 @@ function renderCharSheetView(char) {
 }
 
 function deleteChar(id) {
-  if(!confirm('¿Eliminar este personaje?')) return;
+  showConfirm('¿Eliminar este personaje?', () => {
   // Disassociate any user linked to it
   state.users.forEach(u=>{ if(u.charId===id) u.charId=null; });
   state.chars = state.chars.filter(c=>c.id!==id);
   saveState(); renderCharList(); renderUserList();
   showToast('Personaje eliminado', 'info');
+  }, 'Eliminar personaje');
 }
 
 function refreshCombatantSelects() {
@@ -1858,10 +1859,11 @@ function renderEnemyList() {
   refreshCombatantSelects();
 }
 function deleteEnemy(id) {
-  if(!confirm('¿Eliminar este tipo de enemigo?')) return;
+  showConfirm('¿Eliminar este tipo de enemigo?', () => {
   state.enemies=state.enemies.filter(e=>e.id!==id);
   saveState(); renderEnemyList();
   showToast('Enemigo eliminado', 'info');
+  }, 'Eliminar enemigo');
 }
 
 function cloneEnemy(id) {
@@ -1945,13 +1947,13 @@ function renderUserList() {
 function deleteUser(id) {
   const u = state.users.find(x=>x.id===id);
   if (!u) return;
-  if (u.id === currentUser?.id) { alert('No puedes eliminar tu propia cuenta.'); return; }
-  // Prevent deleting the last DM
-  if (u.isDM && state.users.filter(x=>x.isDM).length <= 1) { alert('Debe existir al menos un Director de Juego.'); return; }
-  if (!confirm(`¿Eliminar usuario "${u.username}"?`)) return;
+  if (u.id === currentUser?.id) { showToast('No puedes eliminar tu propia cuenta.', 'error'); return; }
+  if (u.isDM && state.users.filter(x=>x.isDM).length <= 1) { showToast('Debe existir al menos un Director de Juego.', 'error'); return; }
+  showConfirm(`¿Eliminar usuario "${u.username}"?`, () => {
   state.users = state.users.filter(x=>x.id!==id);
   saveState(); renderUserList();
   showToast('Usuario eliminado', 'info');
+  }, 'Eliminar usuario');
 }
 
 // ===========================
@@ -2099,6 +2101,16 @@ function openSpectatorWindow(sessionId) {
   }
 })();
 
+function showConfirm(msg, onOk, title = 'Confirmar acción') {
+  document.getElementById('modal-confirm-title').textContent = title;
+  document.getElementById('modal-confirm-msg').textContent = msg;
+  const okBtn = document.getElementById('modal-confirm-ok');
+  const newBtn = okBtn.cloneNode(true); // remove old listeners
+  okBtn.parentNode.replaceChild(newBtn, okBtn);
+  newBtn.onclick = () => { closeModal('modal-confirm'); onOk(); };
+  openModal('modal-confirm');
+}
+
 // ===========================
 //  TOAST NOTIFICATIONS
 // ===========================
@@ -2168,3 +2180,4 @@ _g.openPrepareCombatsModal   = openPrepareCombatsModal;
 _g.savePrepareCombats        = savePrepareCombats;
 _g.toggleSessionPublished    = toggleSessionPublished;
 _g.showToast                 = showToast;
+_g.showConfirm               = showConfirm;

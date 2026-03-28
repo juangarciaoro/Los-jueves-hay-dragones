@@ -570,6 +570,20 @@
   </div>
 </div>
 
+<!-- MODAL CONFIRMACIÓN -->
+<div id="modal-confirm" class="modal-overlay">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header"><span id="modal-confirm-title">Confirmar acción</span><button class="modal-close" onclick="closeModal('modal-confirm')">✕</button></div>
+    <div class="modal-body">
+      <p id="modal-confirm-msg" style="font-family:'Crimson Text',serif;font-size:1rem;color:var(--text);line-height:1.6"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-confirm')">Cancelar</button>
+      <button class="btn btn-danger btn-sm" id="modal-confirm-ok">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== VISTA ESPECTADOR (sin login, para compartir pantalla) ===== -->
 <div id="spectator-view" style="display:none">
   <div class="spectator-header">
