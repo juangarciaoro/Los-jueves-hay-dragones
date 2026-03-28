@@ -93,8 +93,8 @@
       <button class="btn btn-outline btn-sm" onclick="switchView('maint')">← Volver a Mantenimiento</button>
     </div>
     <div id="maint-personajes" class="maint-section active">
+      <button class="btn btn-gold dm-only-ctrl" id="btn-add-char" onclick="openCharModal()" style="margin-bottom:12px">+ Añadir Personaje</button>
       <div id="pj-list" class="entity-list"></div>
-      <button class="btn btn-gold dm-only-ctrl" id="btn-add-char" onclick="openCharModal()">+ Añadir Personaje</button>
       <!-- player char panel -->
       <div id="player-char-panel" style="display:none">
         <div class="section-title">Tu Personaje</div>
@@ -102,12 +102,12 @@
       </div>
     </div>
     <div id="maint-enemigos" class="maint-section">
+      <button class="btn btn-gold dm-only-ctrl" onclick="openEnemyModal()" style="margin-bottom:12px">+ Añadir Tipo de Enemigo</button>
       <div id="enemy-list" class="entity-list"></div>
-      <button class="btn btn-gold dm-only-ctrl" onclick="openEnemyModal()">+ Añadir Tipo de Enemigo</button>
     </div>
     <div id="maint-usuarios" class="maint-section">
+      <button class="btn btn-gold" onclick="openUserModal()" style="margin-bottom:12px">+ Añadir Usuario</button>
       <div id="user-list" class="entity-list"></div>
-      <button class="btn btn-gold" onclick="openUserModal()">+ Añadir Usuario</button>
     </div>
     <div id="maint-sesiones" class="maint-section">
       <div class="section-title">Sesiones</div>
