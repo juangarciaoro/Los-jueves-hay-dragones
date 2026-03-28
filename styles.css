@@ -2,15 +2,15 @@
 :root {
   /* Backgrounds */
   --bg-base:    #1e1608;
-  --bg-panel:   #271d0b;
-  --bg-card:    #31260f;
-  --bg-input:   rgba(22,16,5,0.85);
-  --bg-hover:   rgba(48,36,12,0.95);
+  --bg-panel:   #241a08;
+  --bg-card:    #352a10;
+  --bg-input:   rgba(10,8,2,0.70);
+  --bg-hover:   rgba(50,38,14,0.95);
 
   /* Text */
-  --text:       #c4b28a;
-  --text-muted: #9a8a62;
-  --text-dim:   #8a7a58;
+  --text:       #d4c49a;
+  --text-muted: #b0a070;
+  --text-dim:   #9a8c60;
 
   /* Gold */
   --gold:       #9a7c28;
@@ -25,6 +25,7 @@
   --blood-light:#b02828;
   --green:      #2a6e36;
   --green-light:#3a9448;
+  --warning:    #c87820;
 
   /* Aliases used in HTML */
   --parchment:       var(--bg-card);
@@ -68,7 +69,7 @@ body{
   min-height:100vh;
   display:flex;
   flex-direction:column;
-  line-height:1.68;
+  line-height:1.75;
 }
 
 /* ===== LOGIN ===== */
@@ -105,11 +106,11 @@ body{
 }
 .login-crest .sub{
   font-family:'Cinzel',serif;color:var(--text-muted);
-  font-size:.54rem;letter-spacing:5px;text-transform:uppercase;margin-top:8px;
+  font-size:.62rem;letter-spacing:5px;text-transform:uppercase;margin-top:8px;
 }
 .login-body{padding:28px 26px;display:flex;flex-direction:column;gap:16px;}
 .login-body label{
-  font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:2px;
+  font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:2px;
   color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:5px;
 }
 .login-input{
@@ -154,11 +155,11 @@ body{
 }
 #app-header .sub{
   font-family:'Cinzel',serif;color:var(--text-muted);
-  font-size:.54rem;letter-spacing:5px;text-transform:uppercase;margin-top:2px;
+  font-size:.62rem;letter-spacing:5px;text-transform:uppercase;margin-top:2px;
 }
 .header-right{display:flex;gap:10px;align-items:center;}
 .user-badge{
-  font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:1px;
+  font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:1px;
   color:var(--text-muted);
   border:1px solid var(--gold-border);
   padding:5px 12px;border-radius:var(--radius-sm);
@@ -171,7 +172,7 @@ body{
   background:rgba(4,3,1,0.97);
   border-bottom:1px solid rgba(160,124,36,0.12);
   padding:9px 28px;
-  font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:1px;
+  font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:1px;
   color:var(--text-muted);
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
 }
@@ -187,7 +188,7 @@ body{
   scrollbar-width:thin;scrollbar-color:var(--gold-border) var(--bg-base);
 }
 .tab-btn{
-  font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:1px;
+  font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:1px;
   color:var(--text-muted);background:transparent;border:none;
   border-bottom:2px solid transparent;padding:11px 18px 9px;
   cursor:pointer;white-space:nowrap;transition:all var(--t);text-transform:uppercase;
@@ -279,7 +280,7 @@ body{
   position:relative;overflow:hidden;
 }
 .panel-header{
-  font-family:'Cinzel',serif;font-size:.67rem;letter-spacing:3px;text-transform:uppercase;
+  font-family:'Cinzel',serif;font-size:.76rem;letter-spacing:3px;text-transform:uppercase;
   font-weight:600;color:var(--gold-light);
   border-bottom:1px solid var(--gold-border);
   padding:13px 18px;
@@ -353,7 +354,7 @@ body.spectator-mode #main-content { display:none !important; }
 .eventos-session-result{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;}
 .evr-empty{color:var(--text-muted);font-family:'Crimson Text',serif;font-style:italic;font-size:.9rem;padding:8px 0;}
 .evr-header{display:flex;align-items:center;gap:10px;}
-.evr-cat-badge{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:1px;text-transform:uppercase;padding:2px 10px;border-radius:20px;border:1px solid currentColor;opacity:.85;}
+.evr-cat-badge{font-family:'Cinzel',serif;font-size:.66rem;letter-spacing:1px;text-transform:uppercase;padding:2px 10px;border-radius:20px;border:1px solid currentColor;opacity:.85;}
 .evr-title{font-family:'Cinzel',serif;font-size:.9rem;color:var(--text);font-weight:600;}
 .acto-item{border:1px solid var(--gold-border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:6px;}
 .acto-item:last-child{margin-bottom:0;}
@@ -424,7 +425,7 @@ body.spectator-mode #main-content { display:none !important; }
 .session-title-input:focus{border-bottom-color:var(--gold-light);}
 .session-title-input[readonly]{color:var(--text-muted);cursor:default;}
 .readonly-label{
-  font-family:'Cinzel',serif;font-size:.54rem;letter-spacing:2px;color:var(--blood-light);
+  font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:2px;color:var(--blood-light);
   text-transform:uppercase;display:inline-block;margin-left:8px;opacity:.7;
 }
 
@@ -437,7 +438,7 @@ body.spectator-mode #main-content { display:none !important; }
 .roll-badge.secret{color:var(--gold-light);}
 .roll-badge.dm{color:var(--text-muted);}
 .dice-group{display:flex;flex-direction:column;align-items:center;gap:6px;}
-.dice-group label{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:2px;color:var(--text-muted);text-transform:uppercase;}
+.dice-group label{font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:2px;color:var(--text-muted);text-transform:uppercase;}
 .qty-input{
   width:48px;text-align:center;font-family:'Crimson Text',serif;font-size:1rem;
   background:var(--bg-input);border:1px solid var(--gold-border);border-radius:var(--radius-sm);
@@ -466,7 +467,7 @@ body.spectator-mode #main-content { display:none !important; }
 }
 .roll-entry{display:flex;justify-content:space-between;align-items:baseline;font-size:.85rem;}
 .roll-entry .rl{color:var(--text-muted);font-style:italic;}
-.roll-entry .ru{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.5px;color:var(--gold-light);margin-right:6px;}
+.roll-entry .ru{font-family:'Cinzel',serif;font-size:.66rem;letter-spacing:.5px;color:var(--gold-light);margin-right:6px;}
 .roll-entry .rv{color:var(--gold-light);font-weight:600;}
 
 /* ===== INITIATIVE ===== */
@@ -520,14 +521,14 @@ body.spectator-mode #main-content { display:none !important; }
 .combatant-card.type-enemy:hover{background:rgba(160,80,20,0.15);border-color:rgba(200,110,30,0.58);}
 .combatant-card.type-enemy.active-turn{background:rgba(160,80,20,0.16);border-color:rgba(200,110,30,0.78);box-shadow:0 0 0 1px rgba(200,110,30,0.3), inset 3px 0 0 #c86e1e;}
 .c-init{font-family:'Cinzel',serif;font-size:.95rem;font-weight:700;color:var(--gold-light);text-align:center;}
-.c-name{font-family:'Cinzel',serif;font-size:.82rem;color:var(--text);}
-.c-type{font-size:.54rem;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);display:block;font-family:'Crimson Text',serif;}
+.c-name{font-family:'Cinzel',serif;font-size:.88rem;font-weight:600;color:var(--text);}
+.c-type{font-size:.62rem;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);display:block;font-family:'Crimson Text',serif;}
 .hp-bar-wrap{display:flex;flex-direction:column;gap:3px;}
 .hp-bar-track{height:5px;background:rgba(160,124,36,0.12);border-radius:3px;overflow:hidden;}
 .hp-bar-fill{height:100%;background:linear-gradient(90deg,#a02020,#cc3030);border-radius:3px;transition:width .3s ease;}
 .hp-bar-fill.ok{background:linear-gradient(90deg,#256a2e,#32903e);}
-.hp-bar-fill.low{background:linear-gradient(90deg,#8a5010,#b86a18);}
-.hp-text{font-family:'Cinzel',serif;font-size:.62rem;color:var(--text-muted);text-align:right;}
+.hp-bar-fill.low{background:linear-gradient(90deg,var(--warning),#d88020);}
+.hp-text{font-family:'Cinzel',serif;font-size:.68rem;color:var(--text-muted);font-weight:600;text-align:right;}
 .hp-actions{display:flex;gap:4px;}
 .hp-actions.player-hide{display:none!important;}
 .hp-btn{
@@ -597,7 +598,7 @@ body.spectator-mode #main-content { display:none !important; }
 /* ===== FORMS ===== */
 .form-group{display:flex;flex-direction:column;gap:4px;}
 .form-group label,.flabel{
-  font-family:'Cinzel',serif;font-size:.56rem;letter-spacing:1.5px;
+  font-family:'Cinzel',serif;font-size:.70rem;letter-spacing:1.5px;
   color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px;
 }
 .form-input{
