@@ -1954,6 +1954,13 @@ document.querySelectorAll('.modal-overlay').forEach(overlay=>{
 // Enter key in login
 document.getElementById('login-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 document.getElementById('login-user').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('login-pass').focus(); });
+// Escape key closes any open modal
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){
+    const open = document.querySelector('.modal-overlay.open');
+    if(open) open.classList.remove('open');
+  }
+});
 
 // ===========================
 //  EXPORT / IMPORT
