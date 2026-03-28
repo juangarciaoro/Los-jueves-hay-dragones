@@ -166,6 +166,12 @@ body{
   background:rgba(160,124,36,0.07);
 }
 .user-badge span{color:var(--gold-light);font-weight:600;}
+.save-indicator{
+  font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:1px;
+  color:transparent;transition:color .2s;white-space:nowrap;
+}
+.save-indicator.saving{color:var(--text-muted);}
+.save-indicator.saved{color:#5caa6a;}
 
 /* ===== BREADCRUMBS ===== */
 #breadcrumbs{

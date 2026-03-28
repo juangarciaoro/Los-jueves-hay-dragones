@@ -32,12 +32,28 @@ let _playerPreview = false; // DM preview mode as player
 // ===========================
 function saveState() {
   clearTimeout(_saveTimeout);
+  setSaveIndicator('saving');
   _saveTimeout = setTimeout(async () => {
     try {
       _ignoreNext = true;
       await setDoc(STATE_DOC, JSON.parse(JSON.stringify(state)));
-    } catch(e) { console.error('Firestore write:', e); }
+      setSaveIndicator('saved');
+    } catch(e) { console.error('Firestore write:', e); setSaveIndicator(''); }
   }, 1500);
+}
+
+function setSaveIndicator(status) {
+  const el = document.getElementById('save-indicator');
+  if (!el) return;
+  clearTimeout(el._hideTimeout);
+  if (status === 'saving') {
+    el.textContent = 'Guardando…'; el.className = 'save-indicator saving';
+  } else if (status === 'saved') {
+    el.textContent = '✓ Guardado'; el.className = 'save-indicator saved';
+    el._hideTimeout = setTimeout(() => { el.textContent = ''; el.className = 'save-indicator'; }, 2000);
+  } else {
+    el.textContent = ''; el.className = 'save-indicator';
+  }
 }
 
 async function loadState() {
