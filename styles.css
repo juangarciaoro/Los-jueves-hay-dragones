@@ -912,7 +912,16 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   #panel-actos{grid-column:1;grid-row:auto;}
   #panel-eventos-session{grid-column:1;grid-row:auto;}
   #panel-init{grid-column:1;grid-row:auto;}
-  .session-tool-btns{grid-row:auto;flex-direction:row;justify-content:flex-start;padding-top:0;}
+  /* A: DM tool-btns as bottom bar on mobile */
+  .session-grid:not(.player-grid) .session-tool-btns{
+    position:fixed;bottom:0;left:0;right:0;z-index:700;
+    flex-direction:row;justify-content:center;gap:14px;
+    padding:8px 0 max(8px,env(safe-area-inset-bottom));
+    background:var(--bg-panel);border-top:1px solid var(--gold-border);
+    box-shadow:0 -4px 20px rgba(0,0,0,0.6);
+  }
+  .session-grid:not(.player-grid) .tool-popup-btn{width:48px;height:48px;font-size:1.35rem;}
+  .session-grid:not(.player-grid) #panel-init{padding-bottom:68px;}
   .eventos-session-wrap{flex-direction:column;}
   .eventos-cat-btns{flex-direction:row;flex-wrap:wrap;}
   .char-form-grid{grid-template-columns:1fr 1fr;}
@@ -924,6 +933,9 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .hp-bar-wrap{grid-column:2;}.hp-actions{grid-column:3;}
   .modal{width:98%;}
   #landing-buttons,#maint-landing-buttons{max-width:100%;}
+  /* D: Session-edit acto header wraps on mobile */
+  .se-acto-header{flex-wrap:wrap;}
+  .se-acto-title{min-width:100%;margin-bottom:4px;}
   /* A+B+G: Player-grid mobile — single column, bottom bar, hide DM panels */
   .session-grid.player-grid{grid-template-columns:1fr;}
   .session-grid.player-grid #panel-diary{grid-column:1;grid-row:auto;}
@@ -962,7 +974,10 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   #panel-init{grid-column:1;grid-row:auto;}
   .session-tool-btns{grid-row:auto;flex-direction:row;justify-content:flex-start;padding-top:0;}
   .eventos-session-wrap{flex-direction:column;}
-  .eventos-cat-btns{flex-direction:row;flex-wrap:wrap;}
+  /* F: Evento category buttons compact on mobile */
+  .eventos-cat-btns{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .eventos-cat-btns::-webkit-scrollbar{display:none;}
+  .eventos-cat-btns .evt-cat-btn{padding:8px 10px;font-size:.54rem;flex-shrink:0;white-space:nowrap;}
   /* E: Popups as bottom-sheet on mobile */
   .session-popup{align-items:flex-end;}
   .session-popup-inner{
@@ -977,16 +992,35 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .session-grid.player-grid .tool-popup-btn{width:56px;height:56px;font-size:1.6rem;}
   /* F: Combatant-card simplified for player (no hp-actions/dead-btns columns) */
   .player-grid .combatant-card{grid-template-columns:28px 1fr auto;}
+  /* A: DM bottom-bar 600px refinements */
+  .session-grid:not(.player-grid) .tool-popup-btn{width:52px;height:52px;font-size:1.45rem;}
+  .session-grid:not(.player-grid) #panel-init{padding-bottom:74px;}
+  /* B: Init-controls reorganized for mobile DM */
+  .init-controls{flex-wrap:wrap;gap:6px;}
+  .init-controls .next-turn-btn{flex:1 1 auto;min-width:0;}
+  .init-controls .reset-combat-btn,
+  .init-controls .sort-init-btn,
+  .init-controls .clear-npcs-btn{font-size:.54rem;padding:6px 10px;}
+  /* C: DM combatant-card — structured 2-row mobile layout */
+  .combatant-card{display:grid!important;grid-template-columns:28px 1fr auto auto!important;grid-template-rows:auto auto;flex-wrap:initial!important;gap:6px;}
+  .combatant-card .c-init-wrap{grid-column:1;grid-row:1/3;align-self:center;}
+  .combatant-card .c-name{grid-column:2;grid-row:1;min-width:0;}
+  .combatant-card .hp-actions{grid-column:3;grid-row:1;order:0;margin-left:0;}
+  .combatant-card .dead-btns-corner{grid-column:4;grid-row:1;}
+  .combatant-card .hp-bar-wrap{grid-column:2/-1;grid-row:2;width:auto;order:0;}
+  .combatant-card .conditions-wrap{grid-column:1/-1;grid-row:3;width:auto;order:0;}
+  /* D: Session-edit event row wraps */
+  .se-event-row{flex-wrap:wrap;}
+  .se-event-title{min-width:60%;}
+  /* H: Enemy prep chips larger touch targets */
+  .chip-enemy-prep{font-size:.66rem;padding:8px 14px;min-height:36px;}
+  .chip-pj,.chip-enemy{font-size:.66rem;padding:8px 14px;}
   .dice-controls{gap:8px;}
   .dice-btn{padding:10px 14px;flex:1;}
   .dice-result-display{font-size:1.8rem;min-height:50px;}
   .result-total{font-size:2.2rem;}
-  .combatant-card{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
   .c-init{width:28px;flex-shrink:0;text-align:center;}
   .c-name{flex:1;min-width:80px;}
-  .hp-bar-wrap{width:100%;order:3;}
-  .hp-actions{order:2;margin-left:auto;}
-  .conditions-wrap{width:100%;order:4;grid-column:unset;}
   .add-combatant-form{flex-direction:column;gap:10px;}
   .add-combatant-form .form-group{width:100%;}
   .form-input-sm,.form-input-md{width:100%;}
@@ -996,9 +1030,14 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .skills-grid{grid-template-columns:1fr;}
   .entity-card{flex-direction:column;align-items:flex-start;gap:8px;}
   .entity-actions{width:100%;justify-content:flex-end;}
-  .maint-tabs{flex-wrap:nowrap;overflow-x:auto;gap:0;scrollbar-width:none;padding-bottom:0;}
+  /* E: Maint-tabs scroll with fade indicator */
+  .maint-tabs{flex-wrap:nowrap;overflow-x:auto;gap:0;scrollbar-width:none;padding-bottom:0;position:relative;
+    -webkit-mask-image:linear-gradient(90deg,#000 85%,transparent 100%);
+    mask-image:linear-gradient(90deg,#000 85%,transparent 100%);
+    scroll-snap-type:x proximity;
+  }
   .maint-tabs::-webkit-scrollbar{display:none;}
-  .maint-tab{white-space:nowrap;padding:8px 14px;font-size:.58rem;flex-shrink:0;}
+  .maint-tab{white-space:nowrap;padding:8px 14px;font-size:.58rem;flex-shrink:0;scroll-snap-align:start;}
   .modal-overlay{align-items:flex-end;padding:0;}
   .modal{width:100%;max-width:100%!important;max-height:92vh;border-radius:var(--radius-lg) var(--radius-lg) 0 0;border-bottom:none;animation:modal-up .25s ease;}
   .modal-header{border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
