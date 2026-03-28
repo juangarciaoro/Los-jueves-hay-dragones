@@ -924,6 +924,27 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .hp-bar-wrap{grid-column:2;}.hp-actions{grid-column:3;}
   .modal{width:98%;}
   #landing-buttons,#maint-landing-buttons{max-width:100%;}
+  /* A+B+G: Player-grid mobile — single column, bottom bar, hide DM panels */
+  .session-grid.player-grid{grid-template-columns:1fr;}
+  .session-grid.player-grid #panel-diary{grid-column:1;grid-row:auto;}
+  .session-grid.player-grid #panel-actos,
+  .session-grid.player-grid #panel-eventos-session{display:none!important;}
+  .session-grid.player-grid #panel-init{grid-column:1;grid-row:auto;padding-bottom:72px;}
+  .session-grid.player-grid .session-tool-btns{
+    position:fixed;bottom:0;left:0;right:0;z-index:700;
+    flex-direction:row;justify-content:center;gap:16px;
+    padding:10px 0 max(10px,env(safe-area-inset-bottom));
+    background:var(--bg-panel);border-top:1px solid var(--gold-border);
+    box-shadow:0 -4px 20px rgba(0,0,0,0.6);
+  }
+  .session-grid.player-grid .tool-popup-btn{width:52px;height:52px;font-size:1.5rem;}
+  /* H: Round indicator prominent for player */
+  .session-grid.player-grid .init-round{
+    font-size:1rem;padding:8px 0;font-weight:600;color:var(--gold-light);
+  }
+  /* C: Charsheet single-column */
+  .charsheet-grid{grid-template-columns:1fr!important;}
+  .charsheet-grid .cs-span2{grid-column:span 1!important;}
 }
 @media (max-width: 600px) {
   #app-header{padding:8px 14px;gap:8px;}
@@ -942,7 +963,20 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .session-tool-btns{grid-row:auto;flex-direction:row;justify-content:flex-start;padding-top:0;}
   .eventos-session-wrap{flex-direction:column;}
   .eventos-cat-btns{flex-direction:row;flex-wrap:wrap;}
-  .session-popup-inner{max-height:92vh;}
+  /* E: Popups as bottom-sheet on mobile */
+  .session-popup{align-items:flex-end;}
+  .session-popup-inner{
+    max-height:92vh;width:100%;max-width:100%;
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom:none;animation:modal-up .25s ease;
+  }
+  .session-popup-header{border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
+  /* A+B+G: Player-grid 600px refinements */
+  .session-grid.player-grid #panel-init{padding-bottom:76px;}
+  .session-grid.player-grid .session-tool-btns{gap:20px;padding:12px 0 max(12px,env(safe-area-inset-bottom));}
+  .session-grid.player-grid .tool-popup-btn{width:56px;height:56px;font-size:1.6rem;}
+  /* F: Combatant-card simplified for player (no hp-actions/dead-btns columns) */
+  .player-grid .combatant-card{grid-template-columns:28px 1fr auto;}
   .dice-controls{gap:8px;}
   .dice-btn{padding:10px 14px;flex:1;}
   .dice-result-display{font-size:1.8rem;min-height:50px;}
@@ -994,6 +1028,8 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .attr-box input{width:40px;font-size:.9rem;}
   #landing-buttons,#maint-landing-buttons{grid-template-columns:1fr;}
   .landing-card{min-height:90px;padding:20px;}
+  /* D: Charsheet attrs 3-col on smallest screens */
+  .charsheet-attrs{grid-template-columns:repeat(3,1fr)!important;}
 }
 
 .session-card--published{

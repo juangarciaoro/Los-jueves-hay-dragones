@@ -1943,7 +1943,7 @@ function renderCharSheetView(char) {
       <h2 style="font-family:'Cinzel Decorative',serif;color:var(--gold);font-size:1.1rem">${char.name}</h2>
       <button class="btn btn-gold btn-sm" onclick="openCharModal('${char.id}')">✎ Editar</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="charsheet-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="panel">
         <div class="panel-header">Identidad</div>
         <div class="panel-body" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
@@ -1958,7 +1958,7 @@ function renderCharSheetView(char) {
       <div class="panel">
         <div class="panel-header">Atributos y Recursos</div>
         <div class="panel-body">
-          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
+          <div class="charsheet-attrs" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
             ${['fue','int','car','des','vida'].map(a => {const v=char[a]||10;return `<div class="attr-box"><label>${a.toUpperCase()}</label><div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--ink)">${v}</div></div>`}).join('')}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
@@ -1976,7 +1976,7 @@ function renderCharSheetView(char) {
         <div class="panel-header">Armamentísticas</div>
         <div class="panel-body"><div class="skills-grid">${weaponsHtml}</div></div>
       </div>
-      ${habsHtml ? `<div class="panel" style="grid-column:span 2"><div class="panel-header">Habilidades Especiales</div><div class="panel-body">${habsHtml}</div></div>` : ''}
+      ${habsHtml ? `<div class="panel cs-span2" style="grid-column:span 2"><div class="panel-header">Habilidades Especiales</div><div class="panel-body">${habsHtml}</div></div>` : ''}
       ${char.backpack ? `<div class="panel"><div class="panel-header">Mochila</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.backpack}</div></div>` : ''}
       ${char.notes ? `<div class="panel"><div class="panel-header">Notas</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.notes}</div></div>` : ''}
     </div>`;
