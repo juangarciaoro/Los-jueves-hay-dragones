@@ -927,6 +927,14 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .landing-card{min-height:90px;padding:20px;}
 }
 
+.session-card--published{
+  border-left:3px solid rgba(58,148,72,0.7);
+  background:linear-gradient(90deg,rgba(28,60,32,0.35) 0%,transparent 60%);
+}
+.session-card--unpublished{
+  border-left:3px solid rgba(80,70,50,0.4);
+  opacity:.82;
+}
 /* ===== TOAST ===== */
 #toast{
   position:fixed;bottom:28px;right:28px;z-index:9999;

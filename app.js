@@ -479,6 +479,7 @@ function renderSessionList() {
     
     const dm = isDM();
     const isPublished = !!session.published;
+    card.classList.add(isPublished ? 'session-card--published' : 'session-card--unpublished');
     const pubBtn = isPublished
       ? `<button class="btn btn-sm btn-published" onclick="toggleSessionPublished('${session.id}')">🌐 Publicada</button>`
       : `<button class="btn btn-sm btn-unpublished" onclick="toggleSessionPublished('${session.id}')">🔒 No publicada</button>`;
