@@ -43,7 +43,6 @@
   </div>
   <div class="header-right">
     <span id="save-indicator"></span>
-    <div class="user-badge" id="campaign-badge">—</div>
     <div class="user-badge" id="user-badge">—</div>
     <button class="preview-toggle dm-only-ctrl" id="preview-toggle" onclick="togglePlayerPreview()" title="Ver como jugador">
       <span class="tog-dot"></span><span id="preview-label">Vista jugador</span>
@@ -642,5 +641,30 @@
 </div>
 
 <div id="toast" aria-live="polite"></div>
+
+<!-- ENEMY STAT TOOLTIP (DM initiative tracker) -->
+<div id="enemy-stat-tooltip" role="tooltip" aria-hidden="true">
+  <div class="est-header">
+    <span class="est-name"></span>
+    <span class="est-close" onclick="hideEnemyTooltip()">✕</span>
+  </div>
+  <div class="est-stats">
+    <div class="est-stat"><span class="est-label">PV</span><span class="est-val est-pv"></span></div>
+    <div class="est-stat"><span class="est-label">Armadura</span><span class="est-val est-armor"></span></div>
+    <div class="est-stat"><span class="est-label">FUE</span><span class="est-val est-fue"></span></div>
+    <div class="est-stat"><span class="est-label">INT</span><span class="est-val est-int"></span></div>
+    <div class="est-stat"><span class="est-label">CAR</span><span class="est-val est-car"></span></div>
+    <div class="est-stat"><span class="est-label">DES</span><span class="est-val est-des"></span></div>
+  </div>
+  <div class="est-section est-attacks-wrap">
+    <div class="est-section-label">Ataques</div>
+    <div class="est-attacks"></div>
+  </div>
+  <div class="est-section est-notes-wrap">
+    <div class="est-section-label">Notas</div>
+    <div class="est-notes"></div>
+  </div>
+</div>
+
 <script type="module" src="app.js"></script>
 </html>

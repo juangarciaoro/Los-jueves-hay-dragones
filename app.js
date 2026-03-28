@@ -1516,7 +1516,18 @@ function renderCombatantList(session, clone) {
       <div class="dead-btns-corner ${dm?'':'player-hide'}">
         <button class="dead-btn">${c.dead?'♻':'☠'}</button>
         <button class="dead-btn" style="border-color:var(--ink-faded);color:var(--ink-faded)">✕</button>
-      </div>`;
+      </div>
+      ${dm && c.type==='enemy' && c.enemyId ? '<button class="enemy-info-btn" title="Ver ficha del enemigo">ⓘ</button>' : ''}`;
+
+    // Info button hover — DM only, enemy with template
+    if (dm && c.type === 'enemy' && c.enemyId) {
+      const infoBtn = card.querySelector('.enemy-info-btn');
+      if (infoBtn) {
+        infoBtn.addEventListener('mouseenter', () => showEnemyTooltip(c.enemyId, infoBtn));
+        infoBtn.addEventListener('mouseleave', scheduleHideEnemyTooltip);
+        infoBtn.addEventListener('click', e => { e.stopPropagation(); showEnemyTooltip(c.enemyId, infoBtn); });
+      }
+    }
 
     // Conditions
     const condWrap = card.querySelector('.conditions-wrap');
@@ -1565,6 +1576,71 @@ function renderCombatantList(session, clone) {
   }
   // Refresh chips so disabled state of PJ chips stays accurate
   renderCombatantChips(clone, session);
+}
+
+// ===========================
+//  ENEMY STAT TOOLTIP
+// ===========================
+let _tooltipHideTimer = null;
+
+function showEnemyTooltip(enemyId, anchor) {
+  const enemy = state.enemies.find(e => e.id === enemyId);
+  if (!enemy) return;
+  const tip = document.getElementById('enemy-stat-tooltip');
+  if (!tip) return;
+
+  clearTimeout(_tooltipHideTimer);
+
+  tip.querySelector('.est-name').textContent = enemy.name;
+  tip.querySelector('.est-pv').textContent = enemy.pv ?? '—';
+  tip.querySelector('.est-armor').textContent = enemy.armor || '—';
+  tip.querySelector('.est-fue').textContent = enemy.fue ?? '—';
+  tip.querySelector('.est-int').textContent = enemy.int ?? '—';
+  tip.querySelector('.est-car').textContent = enemy.car ?? '—';
+  tip.querySelector('.est-des').textContent = enemy.des ?? '—';
+
+  const attacksWrap = tip.querySelector('.est-attacks-wrap');
+  const attacksEl   = tip.querySelector('.est-attacks');
+  const attacks = (enemy.attacks || '').trim();
+  attacksEl.textContent = attacks;
+  attacksWrap.style.display = attacks ? '' : 'none';
+
+  const notesWrap = tip.querySelector('.est-notes-wrap');
+  const notesEl   = tip.querySelector('.est-notes');
+  const notes = (enemy.notes || '').trim();
+  notesEl.textContent = notes;
+  notesWrap.style.display = notes ? '' : 'none';
+
+  // Position near anchor
+  const rect = anchor.getBoundingClientRect();
+  const tipW = 280;
+  const margin = 8;
+  let left = rect.right + margin;
+  if (left + tipW > window.innerWidth - margin) left = rect.left - tipW - margin;
+  if (left < margin) left = margin;
+  let top = rect.top;
+  tip.style.left = left + 'px';
+  tip.style.top  = top + 'px';
+  tip.style.maxWidth = tipW + 'px';
+
+  tip.removeAttribute('aria-hidden');
+  tip.classList.add('visible');
+
+  // Keep visible when hovering the tooltip itself
+  tip.onmouseenter = () => clearTimeout(_tooltipHideTimer);
+  tip.onmouseleave = scheduleHideEnemyTooltip;
+}
+
+function scheduleHideEnemyTooltip() {
+  clearTimeout(_tooltipHideTimer);
+  _tooltipHideTimer = setTimeout(hideEnemyTooltip, 150);
+}
+
+function hideEnemyTooltip() {
+  const tip = document.getElementById('enemy-stat-tooltip');
+  if (!tip) return;
+  tip.classList.remove('visible');
+  tip.setAttribute('aria-hidden', 'true');
 }
 
 // ===========================
@@ -2538,6 +2614,14 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){
     const open = document.querySelector('.modal-overlay.open');
     if(open) open.classList.remove('open');
+    hideEnemyTooltip();
+  }
+});
+// Click outside enemy tooltip hides it
+document.addEventListener('click', e=>{
+  const tip = document.getElementById('enemy-stat-tooltip');
+  if(tip && tip.classList.contains('visible') && !tip.contains(e.target) && !e.target.classList.contains('enemy-info-btn')){
+    hideEnemyTooltip();
   }
 });
 
@@ -2765,6 +2849,7 @@ _g.openEnemyModal        = openEnemyModal;
 _g.saveEnemy             = saveEnemy;
 _g.deleteEnemy           = deleteEnemy;
 _g.cloneEnemy            = cloneEnemy;
+_g.hideEnemyTooltip      = hideEnemyTooltip;
 _g.openUserModal         = openUserModal;
 _g.saveUser              = saveUser;
 _g.deleteUser            = deleteUser;
