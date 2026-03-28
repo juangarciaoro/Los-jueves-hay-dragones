@@ -2117,6 +2117,15 @@ function openSpectatorWindow(sessionId) {
   }
 })();
 
+function filterList(query, listId) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  const q = query.trim().toLowerCase();
+  list.querySelectorAll('.entity-card').forEach(card => {
+    card.style.display = (!q || card.textContent.toLowerCase().includes(q)) ? '' : 'none';
+  });
+}
+
 function showConfirm(msg, onOk, title = 'Confirmar acción') {
   document.getElementById('modal-confirm-title').textContent = title;
   document.getElementById('modal-confirm-msg').textContent = msg;
@@ -2197,3 +2206,4 @@ _g.savePrepareCombats        = savePrepareCombats;
 _g.toggleSessionPublished    = toggleSessionPublished;
 _g.showToast                 = showToast;
 _g.showConfirm               = showConfirm;
+_g.filterList                = filterList;

@@ -98,6 +98,7 @@
         <div class="section-title">Personajes</div>
         <button class="btn btn-gold btn-sm dm-only-ctrl" id="btn-add-char" onclick="openCharModal()">+ Añadir Personaje</button>
       </div>
+      <input class="search-input" type="search" placeholder="Buscar personaje…" oninput="filterList(this.value,'pj-list')">
       <div id="pj-list" class="entity-list"></div>
       <!-- player char panel -->
       <div id="player-char-panel" style="display:none">
@@ -110,6 +111,7 @@
         <div class="section-title">Enemigos</div>
         <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openEnemyModal()">+ Añadir Tipo de Enemigo</button>
       </div>
+      <input class="search-input" type="search" placeholder="Buscar enemigo…" oninput="filterList(this.value,'enemy-list')">
       <div id="enemy-list" class="entity-list"></div>
     </div>
     <div id="maint-usuarios" class="maint-section">
@@ -124,6 +126,7 @@
         <div class="section-title">Sesiones</div>
         <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openNewSessionModal()" title="Nueva sesión">➕ Nueva Sesión</button>
       </div>
+      <input class="search-input" type="search" placeholder="Buscar sesión…" oninput="filterList(this.value,'session-maint-list')">
       <div id="session-maint-list" class="entity-list"></div>
     </div>
     <div id="maint-estados" class="maint-section">

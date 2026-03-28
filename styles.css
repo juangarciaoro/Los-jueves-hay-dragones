@@ -753,6 +753,15 @@ select.form-input option{background:#161208;color:#c4b28a;}
   display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;
 }
 .maint-section-header .section-title{flex:1;margin:18px 0 12px;}
+.search-input{
+  width:100%;max-width:340px;margin-bottom:12px;
+  font-family:'Crimson Text',serif;font-size:.95rem;
+  background:var(--bg-input);border:1px solid var(--gold-border);border-radius:var(--radius-sm);
+  padding:7px 12px;color:var(--text);outline:none;
+  transition:border-color var(--t),box-shadow var(--t);
+}
+.search-input::placeholder{color:var(--text-muted);}
+.search-input:focus{border-color:var(--gold-light);box-shadow:0 0 0 3px rgba(160,124,36,0.12);}
 .ornament{text-align:center;color:var(--gold);font-size:1rem;letter-spacing:6px;opacity:.35;margin:8px 0;font-family:'Crimson Text',serif;}
 
 /* ===== MODALS ===== */
