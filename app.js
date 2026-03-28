@@ -253,6 +253,10 @@ function updateBreadcrumbs(viewId) {
   } else if (viewId === 'sessions-list') {
     label = '📖 Sesiones';
     show = true;
+  } else if (viewId === 'session-edit') {
+    const editSession = state.sessions.find(s => s.id === _editSessionId);
+    label = editSession ? `✎ ${editSession.name}` : '✎ Preparar sesión';
+    show = true;
   } else if (viewId === 'charsheet') {
     label = '📜 Hoja de Personaje';
     show = true;
@@ -283,6 +287,8 @@ function switchView(viewId) {
     renderMaintLanding();
   } else if (viewId === 'sessions-list') {
     renderActiveSessions();
+  } else if (viewId === 'session-edit') {
+    renderSessionEditView();
   } else if (viewId === 'charsheet') {
     let csChar = null;
     if (currentUser && currentUser.charId) {
@@ -448,6 +454,127 @@ function renderActiveSessions() {
 }
 
 // ===========================
+//  SESSION EDIT VIEW
+// ===========================
+const EDIT_CAT_COLORS = { 'Tensión':'#c86e1e','Combate':'#a02020','Social':'#3ca050','Entorno':'#3a7ab8' };
+const EDIT_CAT_BG     = { 'Tensión':'rgba(200,110,30,0.15)','Combate':'rgba(160,32,32,0.15)','Social':'rgba(60,160,80,0.15)','Entorno':'rgba(58,122,184,0.15)' };
+
+let _editSessionId = null;
+
+function openSessionEdit(sessionId) {
+  _editSessionId = sessionId;
+  renderSessionEditView();
+  switchView('session-edit');
+}
+
+function renderSessionEditView() {
+  const session = state.sessions.find(s => s.id === _editSessionId);
+  const wrap = document.getElementById('session-edit-content');
+  if (!session || !wrap) return;
+
+  const actos = state.actos.filter(a => a.sessionId === session.id);
+
+  let html = `
+    <div class="se-header">
+      <button class="btn btn-outline btn-sm" onclick="switchView('maint');switchMaintSection('sesiones',null)">← Sesiones</button>
+      <span class="se-session-name">${session.name}</span>
+      <span style="font-family:'Crimson Text',serif;font-size:.9rem;color:var(--text-muted)">${actos.length} acto${actos.length!==1?'s':''} · ${state.eventos.filter(e=>e.sessionId===session.id).length} eventos</span>
+    </div>`;
+
+  if (actos.length === 0) {
+    html += `<div style="font-family:'Crimson Text',serif;font-size:1rem;color:var(--text-muted);padding:20px 0">Esta sesión no tiene actos todavía.</div>`;
+  }
+
+  wrap.innerHTML = html;
+
+  actos.forEach(acto => {
+    const eventos = state.eventos.filter(e => e.actoId === acto.id);
+    const block = document.createElement('div');
+    block.className = 'se-acto-block';
+    block.dataset.actoId = acto.id;
+
+    // Acto header
+    const actoHeader = document.createElement('div');
+    actoHeader.className = 'se-acto-header';
+    actoHeader.innerHTML = `
+      <span class="se-acto-title">📜 ${acto.title}</span>
+      <span style="font-family:'Crimson Text',serif;font-size:.82rem;color:var(--text-muted)">${eventos.length} evento${eventos.length!==1?'s':''}</span>
+      <button class="btn btn-outline btn-sm" onclick="openActoModal('${acto.id}','${session.id}')">✎ Editar</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">✕</button>`;
+    block.appendChild(actoHeader);
+
+    // Events list
+    const evList = document.createElement('div');
+    evList.className = 'se-events-list';
+    if (eventos.length === 0) {
+      evList.innerHTML = `<div style="font-family:'Crimson Text',serif;font-style:italic;color:var(--text-muted);font-size:.88rem;padding:6px 0">Sin eventos. Añade el primero.</div>`;
+    }
+    eventos.forEach(ev => {
+      const color = EDIT_CAT_COLORS[ev.categoria] || 'var(--text-muted)';
+      const bg    = EDIT_CAT_BG[ev.categoria]     || 'transparent';
+      const row = document.createElement('div');
+      row.className = 'se-event-row';
+      row.style.borderLeftColor = color;
+      row.innerHTML = `
+        <span class="se-event-cat" style="color:${color};background:${bg}">${ev.categoria}</span>
+        <span class="se-event-title">${ev.title}</span>
+        <button class="btn btn-outline btn-sm" onclick="openEventoModal('${ev.id}','${session.id}','${acto.id}')">✎</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEvento('${ev.id}')">✕</button>`;
+      evList.appendChild(row);
+    });
+    block.appendChild(evList);
+
+    // Add event button
+    const addEvRow = document.createElement('div');
+    addEvRow.className = 'se-add-row';
+    addEvRow.innerHTML = `<button class="btn btn-outline btn-sm" onclick="openEventoModal(null,'${session.id}','${acto.id}')">＋ Añadir evento a este acto</button>`;
+    block.appendChild(addEvRow);
+
+    wrap.appendChild(block);
+  });
+
+  // Add acto button
+  const addActo = document.createElement('div');
+  addActo.className = 'se-add-acto-row';
+  addActo.innerHTML = `<button class="btn btn-gold btn-sm" onclick="openActoModal(null,'${session.id}')">＋ Añadir acto a esta sesión</button>`;
+  wrap.appendChild(addActo);
+
+  // Enemy selector
+  const allowedSet = new Set(session.allowedEnemies || []);
+  const enemiesSection = document.createElement('div');
+  enemiesSection.className = 'se-enemies-section';
+  const eTitle = document.createElement('div');
+  eTitle.className = 'se-enemies-title';
+  eTitle.textContent = '⚔ Enemigos de la sesión';
+  enemiesSection.appendChild(eTitle);
+  const eChips = document.createElement('div');
+  eChips.className = 'se-enemies-chips';
+  if (state.enemies.length === 0) {
+    eChips.innerHTML = `<span style="font-family:'Crimson Text',serif;font-size:.88rem;color:var(--text-muted);font-style:italic">No hay enemigos registrados.</span>`;
+  } else {
+    state.enemies.forEach(en => {
+      const chip = document.createElement('button');
+      chip.className = 'chip-enemy-prep' + (allowedSet.has(en.id) ? ' selected' : '');
+      chip.textContent = en.name;
+      chip.onclick = () => toggleEditEnemy(en.id);
+      eChips.appendChild(chip);
+    });
+  }
+  enemiesSection.appendChild(eChips);
+  wrap.appendChild(enemiesSection);
+}
+
+function toggleEditEnemy(enemyId) {
+  const session = state.sessions.find(s => s.id === _editSessionId);
+  if (!session) return;
+  const set = new Set(session.allowedEnemies || []);
+  if (set.has(enemyId)) set.delete(enemyId); else set.add(enemyId);
+  session.allowedEnemies = [...set];
+  saveState();
+  renderSessionEditView();
+}
+
+// ===========================
 //  SESSIONS
 // ===========================
 function rebuildSessionTabs() {
@@ -515,8 +642,8 @@ function renderSessionList() {
       : `<button class="btn btn-sm btn-unpublished" onclick="toggleSessionPublished('${session.id}')">🔒 No publicada</button>`;
     const actionBtns = dm
       ? `${pubBtn}
+         <button class="btn btn-outline btn-sm" onclick="openSessionEdit('${session.id}')">✎ Preparar</button>
          <button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>
-         <button class="btn btn-outline btn-sm" onclick="openPrepareCombatsModal('${session.id}')">⚔ Combates</button>
          <button class="btn btn-danger btn-sm" onclick="deleteSession('${session.id}')">Borrar</button>`
       : `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>`;
     
@@ -1325,7 +1452,7 @@ function renderActoList() {
   });
 }
 
-function openActoModal(id) {
+function openActoModal(id, preSessionId) {
   editingActoId = id || null;
   const a = id ? state.actos.find(x => x.id === id) : null;
   document.getElementById('modal-acto-title').textContent = id ? 'Editar Acto' : 'Nuevo Acto';
@@ -1335,7 +1462,8 @@ function openActoModal(id) {
   state.sessions.forEach(s => {
     const o = document.createElement('option');
     o.value = s.id; o.textContent = s.name;
-    if (a && a.sessionId === s.id) o.selected = true;
+    const selId = a ? a.sessionId : preSessionId;
+    if (selId === s.id) o.selected = true;
     sel.appendChild(o);
   });
   document.getElementById('af-title').value = a ? a.title : '';
@@ -1364,6 +1492,7 @@ function saveActo() {
   closeModal('modal-acto');
   renderActoList();
   showToast('Acto guardado', 'success');
+  if (_editSessionId) renderSessionEditView();
   document.querySelectorAll('.view[data-session-id]').forEach(view => {
     const s = state.sessions.find(x => x.id === view.dataset.sessionId);
     if (s) renderSessionActos(s, view);
@@ -1377,10 +1506,7 @@ function deleteActo(id) {
   state.actos.splice(idx, 1);
   saveState();
   renderActoList();
-  document.querySelectorAll('.view[data-session-id]').forEach(view => {
-    const s = state.sessions.find(x => x.id === view.dataset.sessionId);
-    if (s) renderSessionActos(s, view);
-  });
+  if (_editSessionId) renderSessionEditView();
   }, 'Eliminar acto');
 }
 
@@ -1464,7 +1590,7 @@ function renderEventoList() {
   });
 }
 
-function openEventoModal(id) {
+function openEventoModal(id, preSessionId, preActoId) {
   editingEventoId = id || null;
   const e = id ? state.eventos.find(x => x.id === id) : null;
   document.getElementById('modal-evento-title').textContent = id ? 'Editar Evento' : 'Nuevo Evento Aleatorio';
@@ -1474,11 +1600,14 @@ function openEventoModal(id) {
   state.sessions.forEach(s => {
     const o = document.createElement('option');
     o.value = s.id; o.textContent = s.name;
-    if (e && e.sessionId === s.id) o.selected = true;
+    const selId = e ? e.sessionId : preSessionId;
+    if (selId === s.id) o.selected = true;
     sSel.appendChild(o);
   });
-  // Populate acto dropdown for current session
-  populateEventoActos(e ? e.sessionId : null, e ? e.actoId : null);
+  // Populate acto dropdown
+  const resolvedSessionId = e ? e.sessionId : preSessionId;
+  const resolvedActoId    = e ? e.actoId    : preActoId;
+  populateEventoActos(resolvedSessionId, resolvedActoId);
   document.getElementById('ef2-cat').value = e ? e.categoria : 'Tensión';
   document.getElementById('ef2-title').value = e ? e.title : '';
   document.getElementById('ef2-public').value = e ? (e.public || '') : '';
@@ -1528,6 +1657,7 @@ function saveEvento() {
   closeModal('modal-evento');
   renderEventoList();
   showToast('Evento guardado', 'success');
+  if (_editSessionId) renderSessionEditView();
 }
 
 function deleteEvento(id) {
@@ -1536,6 +1666,7 @@ function deleteEvento(id) {
   state.eventos.splice(idx, 1);
   saveState();
   renderEventoList();
+  if (_editSessionId) renderSessionEditView();
 }
 const SKILLS = [
   {key:'nadar',label:'Nadar / Bucear',attr:'DES'},{key:'cerraduras',label:'Abrir Cerraduras',attr:'INT'},
@@ -2204,6 +2335,9 @@ _g.openSpectatorWindow   = openSpectatorWindow;
 _g.openPrepareCombatsModal   = openPrepareCombatsModal;
 _g.savePrepareCombats        = savePrepareCombats;
 _g.toggleSessionPublished    = toggleSessionPublished;
+_g.openSessionEdit           = openSessionEdit;
+_g.renderSessionEditView     = renderSessionEditView;
+_g.toggleEditEnemy           = toggleEditEnemy;
 _g.showToast                 = showToast;
 _g.showConfirm               = showConfirm;
 _g.filterList                = filterList;
