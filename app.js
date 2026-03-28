@@ -424,7 +424,7 @@ function renderActiveSessions() {
   const activeSessions = state.sessions;
   
   if (activeSessions.length === 0) {
-    list.innerHTML = '<div style="padding:20px;color:var(--ink-faded);text-align:center">No hay sesiones en este momento.</div>';
+    list.innerHTML = '<div class="empty-state">No hay sesiones en este momento.</div>';
     return;
   }
   
@@ -434,7 +434,7 @@ function renderActiveSessions() {
     .reverse();
 
   if (sortedSessions.length === 0) {
-    list.innerHTML = '<div style="padding:20px;color:var(--ink-faded);text-align:center">No hay sesiones disponibles en este momento.</div>';
+    list.innerHTML = '<div class="empty-state">No hay sesiones disponibles en este momento.</div>';
     return;
   }
 
@@ -503,8 +503,8 @@ function renderSessionEditView() {
     actoHeader.innerHTML = `
       <span class="se-acto-title">📜 ${acto.title}</span>
       <span style="font-family:'Crimson Text',serif;font-size:.82rem;color:var(--text-muted)">${eventos.length} evento${eventos.length!==1?'s':''}</span>
-      <button class="btn btn-outline btn-sm se-reorder-btn" ${isFirst?'disabled':''} onclick="moveActo('${acto.id}',-1)">▲</button>
-      <button class="btn btn-outline btn-sm se-reorder-btn" ${isLast?'disabled':''} onclick="moveActo('${acto.id}',1)">▼</button>
+      <button class="btn btn-outline btn-xs" ${isFirst?'disabled':''} onclick="moveActo('${acto.id}',-1)">▲</button>
+      <button class="btn btn-outline btn-xs" ${isLast?'disabled':''} onclick="moveActo('${acto.id}',1)">▼</button>
       <button class="btn btn-outline btn-sm" onclick="openActoModal('${acto.id}','${session.id}')">✎ Editar</button>
       <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">✕ Borrar</button>`;
     block.appendChild(actoHeader);
@@ -556,7 +556,7 @@ function renderSessionEditView() {
   const eChips = document.createElement('div');
   eChips.className = 'se-enemies-chips';
   if (state.enemies.length === 0) {
-    eChips.innerHTML = `<span style="font-family:'Crimson Text',serif;font-size:.88rem;color:var(--text-muted);font-style:italic">No hay enemigos registrados.</span>`;
+    eChips.innerHTML = '<span class="empty-state" style="display:inline">No hay enemigos registrados.</span>';
   } else {
     state.enemies.forEach(en => {
       const chip = document.createElement('button');
@@ -635,7 +635,7 @@ function renderSessionList() {
   list.innerHTML = '';
 
   if (state.sessions.length === 0) {
-    list.innerHTML = '<div style="padding:10px;color:var(--ink-faded);">No hay sesiones creadas.</div>';
+    list.innerHTML = '<div class="empty-state">No hay sesiones creadas.</div>';
     return;
   }
 
@@ -1386,7 +1386,7 @@ function renderEstadoList() {
   if (!list) return;
   list.innerHTML = '';
   if (state.estados.length === 0) {
-    list.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-family:\'Crimson Text\',serif">No hay estados definidos. Los estados predeterminados del sistema se usarán en el gestor de iniciativa.</div>';
+    list.innerHTML = '<div class="empty-state">No hay estados definidos. Los estados predeterminados del sistema se usarán en el gestor de iniciativa.</div>';
     return;
   }
   state.estados.forEach((e, i) => {
@@ -1435,14 +1435,14 @@ function renderActoList() {
   if (!list) return;
   list.innerHTML = '';
   if (state.actos.length === 0 && state.sessions.length === 0) {
-    list.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-family:\'Crimson Text\',serif">No hay actos definidos.</div>';
+    list.innerHTML = '<div class="empty-state">No hay actos definidos.</div>';
     return;
   }
 
   // Group actos by session; show all sessions that have actos
   const sessionIds = [...new Set(state.actos.map(a => a.sessionId))];
   if (sessionIds.length === 0) {
-    list.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-family:\'Crimson Text\',serif">No hay actos definidos.</div>';
+    list.innerHTML = '<div class="empty-state">No hay actos definidos.</div>';
     return;
   }
 
@@ -1476,8 +1476,8 @@ function renderActoList() {
           <span class="entity-name">${a.title}</span>
         </div>
         <div class="entity-actions">
-          <button class="btn btn-outline btn-sm se-reorder-btn" ${isFirst?'disabled':''} onclick="moveActo('${a.id}',-1)">▲</button>
-          <button class="btn btn-outline btn-sm se-reorder-btn" ${isLast?'disabled':''} onclick="moveActo('${a.id}',1)">▼</button>
+          <button class="btn btn-outline btn-xs" ${isFirst?'disabled':''} onclick="moveActo('${a.id}',-1)">▲</button>
+          <button class="btn btn-outline btn-xs" ${isLast?'disabled':''} onclick="moveActo('${a.id}',1)">▼</button>
           <button class="btn btn-outline btn-sm" onclick="openActoModal('${a.id}')">✎ Editar</button>
           <button class="btn btn-danger btn-sm" onclick="deleteActo('${a.id}')">✕ Borrar</button>
         </div>`;
@@ -1562,7 +1562,7 @@ function renderEventoList() {
   if (!list) return;
   list.innerHTML = '';
   if (state.eventos.length === 0) {
-    list.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-family:\'Crimson Text\',serif">No hay eventos aleatorios definidos.</div>';
+    list.innerHTML = '<div class="empty-state">No hay eventos aleatorios definidos.</div>';
     return;
   }
 
