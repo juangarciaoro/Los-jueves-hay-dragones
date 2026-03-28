@@ -755,7 +755,8 @@ select.form-input option{background:#161208;color:#c4b28a;}
 .modal{
   background:var(--bg-panel);border:1px solid var(--gold-border-strong);
   border-radius:var(--radius-lg);max-width:720px;width:95%;max-height:90vh;
-  overflow-y:auto;box-shadow:0 40px 100px rgba(0,0,0,0.98), 0 0 0 1px var(--gold-border), var(--shadow-gold);
+  overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 40px 100px rgba(0,0,0,0.98), 0 0 0 1px var(--gold-border), var(--shadow-gold);
   animation:modal-in .22s ease;
 }
 @keyframes modal-in{from{transform:translateY(10px) scale(0.97);opacity:.4;}to{transform:translateY(0) scale(1);opacity:1;}}
@@ -773,11 +774,11 @@ select.form-input option{background:#161208;color:#c4b28a;}
   transition:all var(--t);padding:4px 7px;border-radius:var(--radius-xs);
 }
 .modal-close:hover{color:var(--blood-light);border-color:rgba(122,26,26,0.38);background:rgba(122,26,26,0.1);}
-.modal-body{padding:20px;}
+.modal-body{padding:20px;overflow-y:auto;flex:1;}
 .modal-footer{
   padding:14px 20px;border-top:1px solid var(--gold-border);
   display:flex;justify-content:flex-end;gap:10px;
-  background:rgba(0,0,0,0.2);
+  background:rgba(12,9,2,0.97);flex-shrink:0;
 }
 .input-lg{
   font-family:'Crimson Text',serif;font-size:1rem;width:100%;
