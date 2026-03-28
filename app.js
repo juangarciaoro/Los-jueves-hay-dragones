@@ -506,7 +506,7 @@ function renderSessionEditView() {
       <button class="btn btn-outline btn-sm se-reorder-btn" ${isFirst?'disabled':''} onclick="moveActo('${acto.id}',-1)">▲</button>
       <button class="btn btn-outline btn-sm se-reorder-btn" ${isLast?'disabled':''} onclick="moveActo('${acto.id}',1)">▼</button>
       <button class="btn btn-outline btn-sm" onclick="openActoModal('${acto.id}','${session.id}')">✎ Editar</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">✕</button>`;
+      <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">✕ Borrar</button>`;
     block.appendChild(actoHeader);
 
     // Events list
@@ -668,7 +668,7 @@ function renderSessionList() {
       ? `${pubBtn}
          <button class="btn btn-outline btn-sm" onclick="openSessionEdit('${session.id}')">✎ Preparar</button>
          <button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>
-         <button class="btn btn-danger btn-sm" onclick="deleteSession('${session.id}')">Borrar</button>`
+         <button class="btn btn-danger btn-sm" onclick="deleteSession('${session.id}')">✕ Borrar</button>`
       : `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>`;
     
     const actosCount  = state.actos.filter(a => a.sessionId === session.id).length;
@@ -1397,7 +1397,7 @@ function renderEstadoList() {
         <span class="entity-name">${e.nombre}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-danger btn-sm" onclick="deleteEstado('${e.id}')">✕ Eliminar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEstado('${e.id}')">✕ Borrar</button>
       </div>`;
     list.appendChild(card);
   });
@@ -1417,9 +1417,12 @@ function addEstado() {
 function deleteEstado(id) {
   const idx = state.estados.findIndex(e => e.id === id);
   if (idx === -1) return;
-  state.estados.splice(idx, 1);
-  saveState();
-  renderEstadoList();
+  showConfirm('¿Eliminar este estado?', () => {
+    state.estados.splice(idx, 1);
+    saveState();
+    renderEstadoList();
+    showToast('Estado eliminado', 'info');
+  }, 'Eliminar estado');
 }
 
 // ===========================
@@ -1475,8 +1478,8 @@ function renderActoList() {
         <div class="entity-actions">
           <button class="btn btn-outline btn-sm se-reorder-btn" ${isFirst?'disabled':''} onclick="moveActo('${a.id}',-1)">▲</button>
           <button class="btn btn-outline btn-sm se-reorder-btn" ${isLast?'disabled':''} onclick="moveActo('${a.id}',1)">▼</button>
-          <button class="btn btn-outline btn-sm" onclick="openActoModal('${a.id}')">&#9998; Editar</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteActo('${a.id}')">&#x2715; Eliminar</button>
+          <button class="btn btn-outline btn-sm" onclick="openActoModal('${a.id}')">✎ Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteActo('${a.id}')">✕ Borrar</button>
         </div>`;
       childWrap.appendChild(row);
     });
@@ -1543,6 +1546,7 @@ function deleteActo(id) {
   saveState();
   renderActoList();
   if (_editSessionId) renderSessionEditView();
+  showToast('Acto eliminado', 'info');
   }, 'Eliminar acto');
 }
 
@@ -1612,7 +1616,7 @@ function renderEventoList() {
           </div>
           <div class="entity-actions">
             <button class="btn btn-outline btn-sm" onclick="openEventoModal('${e.id}')">✎ Editar</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteEvento('${e.id}')">✕ Eliminar</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteEvento('${e.id}')">✕ Borrar</button>
           </div>`;
         actoChildren.appendChild(row);
       });
@@ -1697,12 +1701,15 @@ function saveEvento() {
 }
 
 function deleteEvento(id) {
+  showConfirm('¿Eliminar este evento?', () => {
   const idx = state.eventos.findIndex(e => e.id === id);
   if (idx === -1) return;
   state.eventos.splice(idx, 1);
   saveState();
   renderEventoList();
   if (_editSessionId) renderSessionEditView();
+  showToast('Evento eliminado', 'info');
+  }, 'Eliminar evento');
 }
 const SKILLS = [
   {key:'nadar',label:'Nadar / Bucear',attr:'DES'},{key:'cerraduras',label:'Abrir Cerraduras',attr:'INT'},
@@ -1881,11 +1888,11 @@ function renderCharList() {
       <div class="entity-card-info">
         <span class="entity-name">${c.name}</span>
         <span class="entity-meta">${c.class||''} · ${c.race||''} · Jugador: ${c.player||'—'}</span>
-        <span class="entity-meta">PV ${c.pv} | PM ${c.pm} | FUE ${c.fue} INT ${c.int} CAR ${c.car} DES ${c.des}</span>
+        <span class="entity-meta">PV ${c.vida} | PM ${c.pm} | FUE ${c.fue} INT ${c.int} CAR ${c.car} DES ${c.des}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-outline btn-sm" onclick="openCharModal('${c.id}')">Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteChar('${c.id}')">Borrar</button>
+        <button class="btn btn-outline btn-sm" onclick="openCharModal('${c.id}')">✎ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteChar('${c.id}')">✕ Borrar</button>
       </div>`;
     list.appendChild(card);
   });
@@ -2030,7 +2037,7 @@ function renderEnemyList() {
   const list=document.getElementById('enemy-list'); list.innerHTML='';
   state.enemies.forEach(e=>{
     const card=document.createElement('div'); card.className='entity-card';
-    const actions=isDM()?`<button class="btn btn-outline btn-sm" onclick="openEnemyModal('${e.id}')">Editar</button><button class="btn btn-outline btn-sm" onclick="cloneEnemy('${e.id}')" title="Clonar">⧉ Clonar</button><button class="btn btn-danger btn-sm" onclick="deleteEnemy('${e.id}')">Borrar</button>`:'';
+    const actions=isDM()?`<button class="btn btn-outline btn-sm" onclick="openEnemyModal('${e.id}')">✎ Editar</button><button class="btn btn-outline btn-sm" onclick="cloneEnemy('${e.id}')" title="Clonar">⧉ Clonar</button><button class="btn btn-danger btn-sm" onclick="deleteEnemy('${e.id}')">✕ Borrar</button>`:'';
     card.innerHTML=`
       <div class="entity-card-info">
         <span class="entity-name">${e.name}</span>
@@ -2121,8 +2128,8 @@ function renderUserList() {
         <span class="entity-meta">${u.isDM?'⚔ Director de Juego':'Jugador'}${linkedChar?' · '+linkedChar.name:''}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-outline btn-sm" onclick="openUserModal('${u.id}')">Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">Borrar</button>
+        <button class="btn btn-outline btn-sm" onclick="openUserModal('${u.id}')">✎ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">✕ Borrar</button>
       </div>`;
     list.appendChild(card);
   });
