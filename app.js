@@ -528,6 +528,7 @@ function deleteSession(id) {
   if (wasActive) {
     switchView('maint');
   }
+  showToast('Sesión eliminada', 'info');
 }
 
 // ===========================
@@ -582,6 +583,7 @@ function toggleSessionPublished(id) {
   session.published = !session.published;
   saveState();
   renderSessionList();
+  showToast(session.published ? 'Sesión publicada' : 'Sesión ocultada', 'info');
 }
 
 function savePrepareCombats() {
@@ -590,6 +592,7 @@ function savePrepareCombats() {
   session.allowedEnemies = [..._prepareCombatsSelected];
   saveState();
   closeModal('modal-prepare-combats');
+  showToast('Combates guardados', 'success');
   // Refresh chips in any open session view
   const container = document.getElementById('view-' + session.id);
   if (container) renderCombatantChips(container, session);
@@ -612,6 +615,7 @@ function createSession() {
   buildSessionView(session);
   switchView(session.id);
   renderSessionList();
+  showToast('Sesión creada', 'success');
 }
 
 
@@ -1327,6 +1331,7 @@ function saveActo() {
   saveState();
   closeModal('modal-acto');
   renderActoList();
+  showToast('Acto guardado', 'success');
   document.querySelectorAll('.view[data-session-id]').forEach(view => {
     const s = state.sessions.find(x => x.id === view.dataset.sessionId);
     if (s) renderSessionActos(s, view);
@@ -1489,6 +1494,7 @@ function saveEvento() {
   saveState();
   closeModal('modal-evento');
   renderEventoList();
+  showToast('Evento guardado', 'success');
 }
 
 function deleteEvento(id) {
@@ -1656,6 +1662,7 @@ function saveChar() {
   saveState();
   closeModal('modal-char');
   renderCharList();
+  showToast('Personaje guardado', 'success');
   // If player updated their own char, refresh player panel
   if(!isDM()) { const myChar=state.chars.find(c=>c.id===currentUser.charId); if(myChar) renderPlayerCharPanel(myChar); }
 }
@@ -1774,6 +1781,7 @@ function deleteChar(id) {
   state.users.forEach(u=>{ if(u.charId===id) u.charId=null; });
   state.chars = state.chars.filter(c=>c.id!==id);
   saveState(); renderCharList(); renderUserList();
+  showToast('Personaje eliminado', 'info');
 }
 
 function refreshCombatantSelects() {
@@ -1815,6 +1823,7 @@ function saveEnemy() {
   if(editingEnemyId){const idx=state.enemies.findIndex(e=>e.id===editingEnemyId);state.enemies[idx]=enemy;}
   else state.enemies.push(enemy);
   saveState(); closeModal('modal-enemy'); renderEnemyList();
+  showToast('Enemigo guardado', 'success');
 }
 function renderEnemyList() {
   const list=document.getElementById('enemy-list'); list.innerHTML='';
@@ -1835,6 +1844,7 @@ function deleteEnemy(id) {
   if(!confirm('¿Eliminar este tipo de enemigo?')) return;
   state.enemies=state.enemies.filter(e=>e.id!==id);
   saveState(); renderEnemyList();
+  showToast('Enemigo eliminado', 'info');
 }
 
 function cloneEnemy(id) {
@@ -1844,6 +1854,7 @@ function cloneEnemy(id) {
   state.enemies.push(clone);
   saveState();
   renderEnemyList();
+  showToast('Enemigo clonado', 'success');
   // Open editor so user can rename immediately
   openEnemyModal(clone.id);
 }
@@ -1895,6 +1906,7 @@ function saveUser() {
     state.users.push({ id:uid(), username, passwordHash:hashPassword(password), isDM:isDMchecked, charId });
   }
   saveState(); closeModal('modal-user'); renderUserList();
+  showToast('Usuario guardado', 'success');
 }
 function renderUserList() {
   const list = document.getElementById('user-list'); list.innerHTML='';
@@ -1922,6 +1934,7 @@ function deleteUser(id) {
   if (!confirm(`¿Eliminar usuario "${u.username}"?`)) return;
   state.users = state.users.filter(x=>x.id!==id);
   saveState(); renderUserList();
+  showToast('Usuario eliminado', 'info');
 }
 
 // ===========================
@@ -1954,6 +1967,7 @@ function exportData() {
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='los_jueves_hay_dragones.json'; a.click();
   URL.revokeObjectURL(url);
+  showToast('Copia exportada', 'success');
 }
 function importData(event) {
   const file=event.target.files[0]; if(!file) return;
@@ -1970,7 +1984,7 @@ function importData(event) {
       rebuildSessionTabs();
       renderCharList(); renderEnemyList(); renderUserList();
       switchView('maint');
-      alert('Datos importados correctamente.');
+      showToast('Datos importados correctamente', 'success');
     } catch(err) { alert('Error al importar: ' + err.message); }
   };
   reader.readAsText(file);
@@ -2062,6 +2076,20 @@ function openSpectatorWindow(sessionId) {
 })();
 
 // ===========================
+//  TOAST NOTIFICATIONS
+// ===========================
+function showToast(msg, type = 'success') {
+  const container = document.getElementById('toast');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'toast-msg ' + type;
+  el.textContent = msg;
+  container.appendChild(el);
+  // Auto-remove after animation (2.3s fade-out + 0.3s = 2.6s)
+  setTimeout(() => el.remove(), 2650);
+}
+
+// ===========================
 //  EXPOSE GLOBALS (required for type="module" scope)
 // ===========================
 const _g = window;
@@ -2115,3 +2143,4 @@ _g.openSpectatorWindow   = openSpectatorWindow;
 _g.openPrepareCombatsModal   = openPrepareCombatsModal;
 _g.savePrepareCombats        = savePrepareCombats;
 _g.toggleSessionPublished    = toggleSessionPublished;
+_g.showToast                 = showToast;
