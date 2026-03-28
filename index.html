@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Los Jueves Hay Dragones</title>
+<title>Mesa de Juego</title>
 <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -13,10 +13,14 @@
 <div id="login-screen">
   <div class="login-box">
     <div class="login-crest">
-      <h1>Los Jueves Hay Dragones</h1>
-      <div class="sub">Mesa del Director de Juego</div>
+      <h1 id="brand-login">Mesa de Juego</h1>
+      <div class="sub" id="brand-sub-login">Mesa del Director de Juego</div>
     </div>
     <div class="login-body">
+      <div>
+        <label>Campaña</label>
+        <select id="login-campaign" class="login-input"></select>
+      </div>
       <div>
         <label>Usuario</label>
         <input id="login-user" class="login-input" type="text" placeholder="Nombre de usuario" autocomplete="username">
@@ -34,11 +38,12 @@
 <!-- ===== APP ===== -->
 <header id="app-header">
   <div>
-    <h1>Los Jueves Hay Dragones</h1>
-    <div class="sub">Mesa del Director de Juego</div>
+    <h1 id="brand-header">Mesa de Juego</h1>
+    <div class="sub" id="brand-sub-header">Mesa del Director de Juego</div>
   </div>
   <div class="header-right">
     <span id="save-indicator"></span>
+    <div class="user-badge" id="campaign-badge">—</div>
     <div class="user-badge" id="user-badge">—</div>
     <button class="preview-toggle dm-only-ctrl" id="preview-toggle" onclick="togglePlayerPreview()" title="Ver como jugador">
       <span class="tog-dot"></span><span id="preview-label">Vista jugador</span>
@@ -59,8 +64,8 @@
   <div id="view-landing" class="view active">
     <div class="landing-hero">
       <div style="text-align:center">
-        <h2>Los Jueves Hay Dragones</h2>
-        <p class="landing-sub">Mesa del Director de Juego</p>
+        <h2 id="brand-landing">Mesa de Juego</h2>
+        <p class="landing-sub" id="brand-sub-landing">Mesa del Director de Juego</p>
       </div>
       <div id="landing-buttons"></div>
     </div>
@@ -96,7 +101,7 @@
     <div id="maint-personajes" class="maint-section active">
       <div class="maint-section-header">
         <div class="section-title">Personajes</div>
-        <button class="btn btn-gold btn-sm dm-only-ctrl" id="btn-add-char" onclick="openCharModal()">+ Añadir Personaje</button>
+        <button class="btn btn-gold btn-sm dm-only-ctrl" id="btn-add-char" onclick="openCharModal()">➕ Añadir Personaje</button>
       </div>
       <input class="search-input" type="search" placeholder="Buscar personaje…" oninput="filterList(this.value,'pj-list')">
       <div id="pj-list" class="entity-list"></div>
@@ -109,7 +114,7 @@
     <div id="maint-enemigos" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Enemigos</div>
-        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openEnemyModal()">+ Añadir Tipo de Enemigo</button>
+        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openEnemyModal()">➕ Añadir Tipo de Enemigo</button>
       </div>
       <input class="search-input" type="search" placeholder="Buscar enemigo…" oninput="filterList(this.value,'enemy-list')">
       <div id="enemy-list" class="entity-list"></div>
@@ -117,7 +122,7 @@
     <div id="maint-usuarios" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Usuarios</div>
-        <button class="btn btn-gold btn-sm" onclick="openUserModal()">+ Añadir Usuario</button>
+        <button class="btn btn-gold btn-sm" onclick="openUserModal()">➕ Añadir Usuario</button>
       </div>
       <div id="user-list" class="entity-list"></div>
     </div>
@@ -135,23 +140,30 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
         <input id="nuevo-estado-input" class="input-lg" style="max-width:260px" placeholder="Nombre del estado…" onkeydown="if(event.key==='Enter')addEstado()">
-        <button class="btn btn-gold" onclick="addEstado()">+ Añadir Estado</button>
+        <button class="btn btn-gold" onclick="addEstado()">➕ Añadir Estado</button>
       </div>
       <div id="estado-list" class="entity-list"></div>
     </div>
     <div id="maint-actos" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Actos</div>
-        <button class="btn btn-gold btn-sm" onclick="openActoModal()">+ Añadir Acto</button>
+        <button class="btn btn-gold btn-sm" onclick="openActoModal()">➕ Añadir Acto</button>
       </div>
       <div id="acto-list" class="entity-list"></div>
     </div>
     <div id="maint-eventos" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Eventos</div>
-        <button class="btn btn-gold btn-sm" onclick="openEventoModal()">+ Añadir Evento</button>
+        <button class="btn btn-gold btn-sm" onclick="openEventoModal()">➕ Añadir Evento</button>
       </div>
       <div id="evento-list" class="entity-list"></div>
+    </div>
+    <div id="maint-campanas" class="maint-section">
+      <div class="maint-section-header">
+        <div class="section-title">Campañas</div>
+        <button class="btn btn-gold btn-sm" onclick="openCampaignModal()">➕ Nueva Campaña</button>
+      </div>
+      <div id="campaign-list" class="entity-list"></div>
     </div>
     <div id="maint-backup" class="maint-section">
       <div style="display:flex;flex-direction:column;gap:12px;max-width:480px">
@@ -579,6 +591,28 @@
   </div>
 </div>
 
+<!-- CAMPAÑA -->
+<div id="modal-campaign" class="modal-overlay">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><span>Nueva Campaña</span><button class="modal-close" onclick="closeModal('modal-campaign')">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label class="flabel">Nombre de campaña</label>
+        <input id="camp-name" class="input-lg" placeholder="Ej: Los defensores del jueves">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="camp-clone-current" style="width:16px;height:16px;accent-color:var(--gold)">
+        <label for="camp-clone-current" style="font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:1px;color:var(--ink);cursor:pointer">Clonar datos de la campaña actual</label>
+      </div>
+      <div id="modal-campaign-error" style="font-family:'Cinzel',serif;font-size:.62rem;color:var(--blood);min-height:16px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-campaign')">Cancelar</button>
+      <button class="btn btn-gold btn-sm" onclick="saveCampaign()">Crear</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONFIRMACIÓN -->
 <div id="modal-confirm" class="modal-overlay">
   <div class="modal" style="max-width:400px">
@@ -600,7 +634,7 @@
       <div class="spectator-session-name"></div>
       <div class="spectator-round">Ronda <span class="spectator-round-num">1</span></div>
     </div>
-    <div class="spectator-logo">Los Jueves Hay Dragones</div>
+    <div class="spectator-logo" id="brand-spectator">Campana</div>
   </div>
   <div class="spectator-body">
     <div class="combatant-list"></div>
