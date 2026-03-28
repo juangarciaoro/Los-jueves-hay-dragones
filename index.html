@@ -93,7 +93,10 @@
       <button class="btn btn-outline btn-sm" onclick="switchView('maint')">← Volver a Mantenimiento</button>
     </div>
     <div id="maint-personajes" class="maint-section active">
-      <button class="btn btn-gold dm-only-ctrl" id="btn-add-char" onclick="openCharModal()" style="margin-bottom:12px">+ Añadir Personaje</button>
+      <div class="maint-section-header">
+        <div class="section-title">Personajes</div>
+        <button class="btn btn-gold btn-sm dm-only-ctrl" id="btn-add-char" onclick="openCharModal()">+ Añadir Personaje</button>
+      </div>
       <div id="pj-list" class="entity-list"></div>
       <!-- player char panel -->
       <div id="player-char-panel" style="display:none">
@@ -102,21 +105,30 @@
       </div>
     </div>
     <div id="maint-enemigos" class="maint-section">
-      <button class="btn btn-gold dm-only-ctrl" onclick="openEnemyModal()" style="margin-bottom:12px">+ Añadir Tipo de Enemigo</button>
+      <div class="maint-section-header">
+        <div class="section-title">Enemigos</div>
+        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openEnemyModal()">+ Añadir Tipo de Enemigo</button>
+      </div>
       <div id="enemy-list" class="entity-list"></div>
     </div>
     <div id="maint-usuarios" class="maint-section">
-      <button class="btn btn-gold" onclick="openUserModal()" style="margin-bottom:12px">+ Añadir Usuario</button>
+      <div class="maint-section-header">
+        <div class="section-title">Usuarios</div>
+        <button class="btn btn-gold btn-sm" onclick="openUserModal()">+ Añadir Usuario</button>
+      </div>
       <div id="user-list" class="entity-list"></div>
     </div>
     <div id="maint-sesiones" class="maint-section">
-      <div class="section-title">Sesiones</div>
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <div class="maint-section-header">
+        <div class="section-title">Sesiones</div>
         <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openNewSessionModal()" title="Nueva sesión">➕ Nueva Sesión</button>
       </div>
       <div id="session-maint-list" class="entity-list"></div>
     </div>
     <div id="maint-estados" class="maint-section">
+      <div class="maint-section-header">
+        <div class="section-title">Estados de Combate</div>
+      </div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
         <input id="nuevo-estado-input" class="input-lg" style="max-width:260px" placeholder="Nombre del estado…" onkeydown="if(event.key==='Enter')addEstado()">
         <button class="btn btn-gold" onclick="addEstado()">+ Añadir Estado</button>
@@ -124,13 +136,15 @@
       <div id="estado-list" class="entity-list"></div>
     </div>
     <div id="maint-actos" class="maint-section">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <div class="maint-section-header">
+        <div class="section-title">Actos</div>
         <button class="btn btn-gold btn-sm" onclick="openActoModal()">+ Añadir Acto</button>
       </div>
       <div id="acto-list" class="entity-list"></div>
     </div>
     <div id="maint-eventos" class="maint-section">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <div class="maint-section-header">
+        <div class="section-title">Eventos</div>
         <button class="btn btn-gold btn-sm" onclick="openEventoModal()">+ Añadir Evento</button>
       </div>
       <div id="evento-list" class="entity-list"></div>
