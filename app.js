@@ -345,13 +345,13 @@ function renderMaintLanding() {
   container.innerHTML = '';
   
   const sections = [
-    { id: 'personajes', name: 'Personajes', icon: '👤', alwaysShow: true },
     { id: 'sesiones', name: 'Sesiones', icon: '📖', dmOnly: true },
-    { id: 'enemigos', name: 'Tipos de Enemigos', icon: '👹', alwaysShow: true },
-    { id: 'usuarios', name: 'Usuarios', icon: '👥', dmOnly: true },
-    { id: 'estados', name: 'Estados', icon: '⚡', dmOnly: true },
     { id: 'actos', name: 'Actos', icon: '📜', dmOnly: true },
     { id: 'eventos', name: 'Eventos Aleatorios', icon: '🎲', dmOnly: true },
+    { id: 'enemigos', name: 'Tipos de Enemigos', icon: '👹', alwaysShow: true },
+    { id: 'estados', name: 'Estados', icon: '⚡', dmOnly: true },
+    { id: 'personajes', name: 'Personajes', icon: '👤', alwaysShow: true },
+    { id: 'usuarios', name: 'Usuarios', icon: '👥', dmOnly: true },
     { id: 'backup', name: 'Copia de Seguridad', icon: '💾', dmOnly: true }
   ];
   
