@@ -637,6 +637,10 @@ select.form-input option{background:#161208;color:#c4b28a;}
 .btn-outline:hover{border-color:var(--gold-border-strong);color:var(--gold-light);transform:translateY(-1px);}
 .btn-danger{background:transparent;border:1px solid rgba(122,26,26,0.5);color:var(--blood-light);}
 .btn-danger:hover{background:rgba(122,26,26,0.12);border-color:rgba(176,40,40,0.7);transform:translateY(-1px);}
+.btn-published{background:rgba(30,100,50,0.18);border:1px solid rgba(58,148,72,0.55);color:#3ca050;}
+.btn-published:hover{background:rgba(30,100,50,0.32);border-color:rgba(58,148,72,0.85);transform:translateY(-1px);}
+.btn-unpublished{background:transparent;border:1px solid rgba(160,124,36,0.35);color:var(--text-muted);}
+.btn-unpublished:hover{background:rgba(160,124,36,0.1);border-color:var(--gold-border-strong);color:var(--gold-light);transform:translateY(-1px);}
 .btn-sm{font-size:.6rem;padding:6px 12px;}
 
 /* ===== MAINTENANCE ===== */

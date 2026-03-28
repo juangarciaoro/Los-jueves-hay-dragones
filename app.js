@@ -390,9 +390,16 @@ function renderActiveSessions() {
     return;
   }
   
-  // Sort by most recent first
-  const sortedSessions = [...activeSessions].reverse();
-  
+  // Sort by most recent first; players only see published sessions
+  const sortedSessions = [...activeSessions]
+    .filter(s => isDM() || s.published)
+    .reverse();
+
+  if (sortedSessions.length === 0) {
+    list.innerHTML = '<div style="padding:20px;color:var(--ink-faded);text-align:center">No hay sesiones disponibles en este momento.</div>';
+    return;
+  }
+
   sortedSessions.forEach(session => {
     const card = document.createElement('div');
     card.className = 'entity-card';
@@ -420,8 +427,9 @@ function rebuildSessionTabs() {
   // Remove old session views
   document.querySelectorAll('#main-content .view[data-session-id]').forEach(v => v.remove());
 
-  // Rebuild session views
+  // Rebuild session views — players only see published sessions
   state.sessions.forEach(session => {
+    if (!isDM() && !session.published) return;
     buildSessionView(session);
   });
 
@@ -468,8 +476,13 @@ function renderSessionList() {
     card.className = 'entity-card';
     
     const dm = isDM();
+    const isPublished = !!session.published;
+    const pubBtn = isPublished
+      ? `<button class="btn btn-sm btn-published" onclick="toggleSessionPublished('${session.id}')">🌐 Publicada</button>`
+      : `<button class="btn btn-sm btn-unpublished" onclick="toggleSessionPublished('${session.id}')">🔒 No publicada</button>`;
     const actionBtns = dm
-      ? `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>
+      ? `${pubBtn}
+         <button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>
          <button class="btn btn-outline btn-sm" onclick="openPrepareCombatsModal('${session.id}')">⚔ Combates</button>
          <button class="btn btn-danger btn-sm" onclick="deleteSession('${session.id}')">Borrar</button>`
       : `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>`;
@@ -561,6 +574,14 @@ function openPrepareCombatsModal(sessionId) {
   openModal('modal-prepare-combats');
 }
 
+function toggleSessionPublished(id) {
+  const session = state.sessions.find(s => s.id === id);
+  if (!session) return;
+  session.published = !session.published;
+  saveState();
+  renderSessionList();
+}
+
 function savePrepareCombats() {
   const session = state.sessions.find(s => s.id === _prepareCombatsSessionId);
   if (!session) { closeModal('modal-prepare-combats'); return; }
@@ -582,7 +603,7 @@ function openNewSessionModal() {
 
 function createSession() {
   const name = document.getElementById('new-session-name').value.trim() || `Sesión ${state.sessions.length + 1}`;
-  const session = { id: uid(), name, title:'', diary:'', dm_notes:'', quick_notes:'', combatants:[], round:1, activeTurn:0, rollHistory:[] };
+  const session = { id: uid(), name, title:'', diary:'', dm_notes:'', quick_notes:'', combatants:[], round:1, activeTurn:0, rollHistory:[], published: false };
   state.sessions.push(session);
   saveState();
   closeModal('modal-new-session');
@@ -2092,5 +2113,6 @@ _g.saveEvento            = saveEvento;
 _g.deleteEvento          = deleteEvento;
 _g.onEventoSessionChange = onEventoSessionChange;
 _g.openSpectatorWindow   = openSpectatorWindow;
-_g.openPrepareCombatsModal = openPrepareCombatsModal;
-_g.savePrepareCombats      = savePrepareCombats;
+_g.openPrepareCombatsModal   = openPrepareCombatsModal;
+_g.savePrepareCombats        = savePrepareCombats;
+_g.toggleSessionPublished    = toggleSessionPublished;
