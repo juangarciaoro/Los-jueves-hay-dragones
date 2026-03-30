@@ -55,14 +55,14 @@ function getCurrentStateDoc() {
 }
 
 function slugifyCampaignName(name) {
-  const base = (name || 'campana')
+  const base = (name || 'campaña')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40);
-  return base || 'campana';
+  return base || 'campaña';
 }
 
 function getUniqueCampaignId(name) {
@@ -201,7 +201,7 @@ async function ensureCampaignCatalog() {
   // First run migration path: if legacy state exists, move it to a default campaign.
   const legacySnap = await getDoc(LEGACY_STATE_DOC);
   const defaultId = 'principal';
-  const defaultName = 'Campana Principal';
+  const defaultName = 'Campaña Principal';
   const migrated = legacySnap.exists() ? normalizeState(legacySnap.data()) : emptyState();
   const migratedUsers = sanitizeUsers(migrated.users || []);
 
@@ -257,7 +257,7 @@ function getBrandName() {
   if (current && current !== '—') return current;
   const selected = getSelectedCampaignName();
   if (selected) return selected;
-  return 'Campana';
+  return 'Campaña';
 }
 
 function applyCampaignBranding() {
@@ -406,7 +406,7 @@ async function doLogin() {
   const password = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-error');
   const hasActiveCampaigns = campaigns.some(c => !c.archived);
-  if (!campaignId && hasActiveCampaigns) { errEl.textContent = 'Selecciona una campana.'; return; }
+  if (!campaignId && hasActiveCampaigns) { errEl.textContent = 'Selecciona una campaña.'; return; }
   if (!username || !password) { errEl.textContent = 'Introduce usuario y contraseña.'; return; }
 
   if (campaignId && currentCampaignId !== campaignId) {
@@ -609,12 +609,12 @@ function switchMaintSection(name, btn) {
   // Update breadcrumbs with section name
   const sectionNames = {
     personajes: '👤 Personajes',
-    sesiones: '📖 Sesiones',
+    sesiones: '📜 Sesiones',
     enemigos: '👹 Tipos de Enemigos',
     usuarios: '👥 Usuarios',
-    campanas: '🗺 Campanas',
+    campanas: '🗺 Campañas',
     estados: '⚡ Estados',
-    actos: '📜 Actos',
+    actos: '🗡️ Actos',
     eventos: '🎲 Eventos Aleatorios',
     backup: '💾 Copia de Seguridad'
   };
@@ -634,15 +634,15 @@ function renderMaintLanding() {
   container.innerHTML = '';
   
   const sections = [
-    { id: 'sesiones', name: 'Sesiones', icon: '📖', dmOnly: true },
-    { id: 'actos', name: 'Actos', icon: '📜', dmOnly: true },
+    { id: 'sesiones', name: 'Sesiones', icon: '📜', dmOnly: true },
+    { id: 'actos', name: 'Actos', icon: '🗡️', dmOnly: true },
     { id: 'eventos', name: 'Eventos Aleatorios', icon: '🎲', dmOnly: true },
-    { id: 'enemigos', name: 'Tipos de Enemigos', icon: '👹', alwaysShow: true },
-    { id: 'estados', name: 'Estados', icon: '⚡', dmOnly: true },
-    { id: 'personajes', name: 'Personajes', icon: '👤', alwaysShow: true },
-    { id: 'usuarios', name: 'Usuarios', icon: '👥', dmOnly: true },
-    { id: 'campanas', name: 'Campanas', icon: '🗺', dmOnly: true },
-    { id: 'backup', name: 'Copia de Seguridad', icon: '💾', dmOnly: true }
+    { id: 'enemigos', name: 'Tipos de Enemigos', icon: '💀', alwaysShow: true },
+    { id: 'estados', name: 'Estados', icon: '🔮', dmOnly: true },
+    { id: 'personajes', name: 'Personajes', icon: '⚔️', alwaysShow: true },
+    { id: 'usuarios', name: 'Usuarios', icon: '🛡️', dmOnly: true },
+    { id: 'campanas', name: 'Campañas', icon: '🏰', dmOnly: true },
+    { id: 'backup', name: 'Copia de Seguridad', icon: '🗝️', dmOnly: true }
   ];
   
   const counts = {
@@ -690,7 +690,7 @@ function renderLandingPage() {
   const btn1 = document.createElement('button');
   btn1.className = 'landing-card';
   if (dm) {
-    btn1.innerHTML = '<span class="card-icon">⚙️</span><span class="card-label">Mantenimiento</span>';
+    btn1.innerHTML = '<span class="card-icon">⚒️</span><span class="card-label">Mantenimiento</span>';
     btn1.onclick = () => switchView('maint');
   } else {
     btn1.innerHTML = '<span class="card-icon">📜</span><span class="card-label">Hoja de Usuario</span>';
@@ -980,7 +980,7 @@ function renderSessionList() {
     for (let p = 1; p <= totalPages; p++) {
       const btn = document.createElement('button');
       btn.className = `btn btn-outline btn-sm ${p === currentPage ? 'active' : ''}`;
-      btn.style.cssText = p === currentPage ? 'background:rgba(180,130,0,.3);border-color:var(--gold)' : '';
+      btn.style.cssText = p === currentPage ? 'background:rgba(166,151,123,.3);border-color:var(--gold)' : '';
       btn.textContent = p;
       btn.onclick = () => { sessionStorage.setItem('session_list_page', p); renderSessionList(); };
       pagDiv.appendChild(btn);
@@ -2518,7 +2518,7 @@ function renderCampaignList() {
   list.innerHTML = '';
 
   if (!campaigns.length) {
-    list.innerHTML = '<div class="empty-state">No hay campanas registradas.</div>';
+    list.innerHTML = '<div class="empty-state">No hay campañas registradas.</div>';
     return;
   }
 
@@ -2573,7 +2573,7 @@ async function saveCampaign() {
   renderCampaignList();
   renderMaintLanding();
   closeModal('modal-campaign');
-  showToast('Campana creada', 'success');
+  showToast('Campaña creada', 'success');
 }
 
 async function toggleCampaignArchived(campaignId) {
@@ -2602,7 +2602,7 @@ async function switchToCampaign(campaignId) {
   document.getElementById('login-pass').value = '';
   document.getElementById('login-error').textContent = '';
   document.getElementById('login-screen').classList.remove('hidden');
-  showToast('Selecciona un usuario para entrar en la campana', 'info');
+  showToast('Selecciona un usuario para entrar en la campaña', 'info');
 }
 
 // ===========================
@@ -2654,7 +2654,7 @@ function exportData() {
   const json=JSON.stringify(payload,null,2);
   const blob=new Blob([json],{type:'application/json'});
   const url=URL.createObjectURL(blob);
-  const safeName = slugifyCampaignName(getBrandName()) || 'campana';
+  const safeName = slugifyCampaignName(getBrandName()) || 'campaña';
   const a=document.createElement('a'); a.href=url; a.download=`${safeName}.json`; a.click();
   URL.revokeObjectURL(url);
   showToast('Copia exportada', 'success');
@@ -2700,11 +2700,11 @@ function showLoadingOverlay(show) {
   if (!el) {
     el = document.createElement('div');
     el.id = 'loading-overlay';
-    el.style.cssText = 'position:fixed;inset:0;z-index:3000;background:radial-gradient(ellipse at center,#2d1a00,#0d0700);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
+    el.style.cssText = 'position:fixed;inset:0;z-index:3000;background:radial-gradient(ellipse at center,#293548,#1a2232);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
     el.innerHTML = `
-      <div id="brand-loading" style="font-family:'Cinzel Decorative',serif;color:#d4a017;font-size:2rem;text-shadow:0 0 20px rgba(180,130,0,.5);">Campana</div>
-      <div style="font-family:'Cinzel',serif;color:#c9b07a;font-size:.65rem;letter-spacing:4px;text-transform:uppercase;">Conectando con la taberna…</div>
-      <div style="width:48px;height:48px;border:3px solid #2d1a00;border-top-color:#d4a017;border-radius:50%;animation:spin .8s linear infinite;"></div>
+      <div id="brand-loading" style="font-family:'Cinzel Decorative',serif;color:#D9BD89;font-size:2rem;text-shadow:0 0 20px rgba(217,189,137,.5);">Campaña</div>
+      <div style="font-family:'Cinzel',serif;color:#A6977B;font-size:.65rem;letter-spacing:4px;text-transform:uppercase;">Conectando con la taberna…</div>
+      <div style="width:48px;height:48px;border:3px solid #293548;border-top-color:#D9BD89;border-radius:50%;animation:spin .8s linear infinite;"></div>
       <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
     document.body.appendChild(el);
   }
@@ -2742,7 +2742,7 @@ function openSpectatorWindow(sessionId) {
   const spectatorCampaign = qs.get('campaign');
   if (spectatorId) {
     if (!spectatorCampaign) {
-      alert('Falta parametro de campana en modo espectador.');
+      alert('Falta parametro de campaña en modo espectador.');
       return;
     }
     document.body.classList.add('spectator-mode');

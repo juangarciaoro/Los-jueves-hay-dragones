@@ -203,7 +203,7 @@
   <div class="session-grid">
     <!-- DIARIO (fila completa) -->
     <div class="panel" id="panel-diary">
-      <div class="panel-header">📖 Diario de Campaña <span class="readonly-label" id="diary-ro-label" style="display:none">Solo lectura</span></div>
+      <div class="panel-header">📜 Diario de Campaña <span class="readonly-label" id="diary-ro-label" style="display:none">Solo lectura</span></div>
       <div class="panel-body">
         <input class="session-title-input" placeholder="Título de la sesión…" data-session-name readonly>
         <textarea class="note-area" placeholder="Resumen y eventos importantes…" data-field="diary"></textarea>
@@ -211,7 +211,7 @@
     </div>
     <!-- ACTOS (solo DM, fila 1 columna derecha) -->
     <div class="panel dm-only-ctrl" id="panel-actos">
-      <div class="panel-header">📜 Actos</div>
+      <div class="panel-header">🗡️ Actos</div>
       <div class="panel-body">
         <div class="actos-accordion"></div>
       </div>
@@ -222,8 +222,8 @@
       <div class="panel-body">
         <div class="eventos-session-wrap">
           <div class="eventos-cat-btns">
-            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Tensión">⚡ Tensión</button>
-            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Combate">⚔ Combate</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Tensión">🔮 Tensión</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Combate">⚔️ Combate</button>
             <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Social">💬 Social</button>
             <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Entorno">🌿 Entorno</button>
             <button class="btn btn-gold btn-sm evt-cat-btn" data-cat="Todos">🎲 Todos</button>
@@ -237,7 +237,7 @@
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px">
                 <label class="flabel" style="margin:0">Contenido Público</label>
-                <button class="btn btn-outline btn-sm evr-pub-btn">📢 Publicar</button>
+                <button class="btn btn-outline btn-sm evr-pub-btn">📯 Publicar</button>
               </div>
               <textarea class="note-area evr-public" style="min-height:80px" readonly></textarea>
               <label class="flabel">Contenido Privado</label>
@@ -249,22 +249,14 @@
     </div>
     <!-- BOTONES DE HERRAMIENTAS (columna izquierda, fila 3) -->
     <div class="session-tool-btns">
-      <button class="tool-popup-btn btn-popup-notes" title="Notas">📝</button>
+      <button class="tool-popup-btn btn-popup-notes" title="Notas">🪶</button>
       <button class="tool-popup-btn btn-popup-dice" title="Dados">🎲</button>
       <button class="tool-popup-btn dm-only-ctrl btn-spectator" title="Abrir vista para jugadores">🖥</button>
     </div>
     <!-- INICIATIVA (columna derecha, fila 2) -->
     <div class="panel" id="panel-init">
-      <div class="panel-header">⚔ Gestor de Iniciativa</div>
+      <div class="panel-header">⚔️ Gestor de Iniciativa</div>
       <div class="panel-body">
-        <div class="init-controls">
-          <button class="btn btn-gold btn-sm next-turn-btn dm-only-ctrl">► Siguiente turno</button>
-          <button class="btn btn-outline btn-sm reset-combat-btn dm-only-ctrl">↺ Reiniciar</button>
-          <button class="btn btn-outline btn-sm sort-init-btn dm-only-ctrl" title="Ordenar por iniciativa">⇅ Ordenar</button>
-          <button class="btn btn-outline btn-sm clear-npcs-btn dm-only-ctrl" title="Eliminar enemigos y libres">🗑 Limpiar NPCs</button>
-          <div class="init-round">Ronda <span class="round-num">1</span></div>
-        </div>
-        <div class="combatant-list"></div>
         <div class="add-combatant-form dm-only-ctrl">
           <div class="combatant-section-label">Personajes</div>
           <div class="combatant-chips-row chips-pj"></div>
@@ -277,6 +269,14 @@
             <button class="btn btn-gold btn-sm add-combatant-btn">Añadir</button>
           </div>
         </div>
+        <div class="init-controls">
+          <button class="btn btn-gold btn-sm next-turn-btn dm-only-ctrl">► Siguiente turno</button>
+          <button class="btn btn-outline btn-sm reset-combat-btn dm-only-ctrl">↺ Reiniciar</button>
+          <button class="btn btn-outline btn-sm sort-init-btn dm-only-ctrl" title="Ordenar por iniciativa">⇅ Ordenar</button>
+          <button class="btn btn-outline btn-sm clear-npcs-btn dm-only-ctrl" title="Eliminar enemigos y libres">🗑 Limpiar NPCs</button>
+          <div class="init-round">Ronda <span class="round-num">1</span></div>
+        </div>
+        <div class="combatant-list"></div>
       </div>
     </div>
   </div>
@@ -578,7 +578,7 @@
 <!-- PREPARAR COMBATES -->
 <div id="modal-prepare-combats" class="modal-overlay">
   <div class="modal" style="max-width:520px">
-    <div class="modal-header"><span id="modal-prepare-combats-title">⚔ Preparar Combates</span><button class="modal-close" onclick="closeModal('modal-prepare-combats')">✕</button></div>
+    <div class="modal-header"><span id="modal-prepare-combats-title">⚔️ Preparar Combates</span><button class="modal-close" onclick="closeModal('modal-prepare-combats')">✕</button></div>
     <div class="modal-body">
       <p style="font-family:'Crimson Text',serif;font-size:.95rem;color:var(--text-muted);margin-bottom:14px">Selecciona los enemigos que aparecerán en esta sesión. Solo estos estarán disponibles en el panel de combate.</p>
       <div id="prepare-combats-chips" class="combatant-chips-row" style="gap:8px;flex-wrap:wrap;min-height:40px"></div>
@@ -634,7 +634,7 @@
       <div class="spectator-session-name"></div>
       <div class="spectator-round">Ronda <span class="spectator-round-num">1</span></div>
     </div>
-    <div class="spectator-logo" id="brand-spectator">Campana</div>
+    <div class="spectator-logo" id="brand-spectator">Campaña</div>
   </div>
   <div class="spectator-body">
     <div class="combatant-list"></div>
