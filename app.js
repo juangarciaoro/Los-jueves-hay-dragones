@@ -1,5 +1,11 @@
 // ===========================
 //  FIREBASE
+//  Configuración e inicialización del cliente Firebase.
+//  `db` es la instancia global de Firestore usada en toda la app.
+//  Documentos principales:
+//    app/campaigns  — catálogo de campañas (IDs + nombres)
+//    app/users      — usuarios globales compartidos entre campañas
+//    campaigns/{id} — estado completo de cada campaña
 // ===========================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot }
@@ -21,6 +27,20 @@ const APP_USERS_DOC = doc(db, 'app', 'users');
 
 // ===========================
 //  STATE
+//  `state` contiene todos los datos de la campaña cargada:
+//    sessions   — sesiones con diario, iniciativa, historial de dados
+//    chars      — fichas de personajes (jugadores)
+//    enemies    — tipos de enemigo reutilizables
+//    users      — (legado) reemplazado por globalUsers
+//    estados    — condiciones de combate personalizadas
+//    actos      — unidades narrativas de cada sesión
+//    eventos    — eventos aleatorios ligados a actos
+//    playerNotes — mapa {userId: texto} de notas personales
+//  Las variables de control:
+//    _saveTimeout   — ID del debounce de guardado en Firestore
+//    _unsubscribe   — detiene el listener de la campaña activa
+//    _ignoreNext    — evita procesar el eco de nuestro propio setDoc
+//    _playerPreview — DM en modo "vista jugador" para previsualizar
 // ===========================
 let state = { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
 let campaigns = [];
@@ -37,6 +57,9 @@ function emptyState() {
   return { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
 }
 
+// Garantiza que todos los campos del estado tienen valores por defecto.
+// Imprescindible cuando se leen documentos de Firestore guardados con
+// versiones anteriores de la app que podían carecer de campos nuevos.
 function normalizeState(data) {
   return {
     sessions: data?.sessions || [],
@@ -295,10 +318,17 @@ function applyDeskSubtitle() {
 
 // ===========================
 //  PERSIST (Firestore)
+//  saveState(): persiste el estado con debounce de 1.5s para agruz
+//    cambios rápidos (ej: plusieurs clics de HP) en una sola escritura.
+//  loadState(): carga completa al cambiar de campaña.
+//  startRealtimeSync(): activa el listener onSnapshot; cualquier cambio
+//    externo (otro usuario) actualiza la UI automáticamente.
 // ===========================
+// Persiste el estado en Firestore con debounce de 1.5s.
+// Usa JSON.parse(JSON.stringify(...)) para clonar y eliminar
+// referencias cíclicas antes de escribir.
 function saveState() {
   const stateDoc = getCurrentStateDoc();
-  if (!stateDoc) return;
   clearTimeout(_saveTimeout);
   setSaveIndicator('saving');
   _saveTimeout = setTimeout(async () => {
@@ -324,6 +354,9 @@ function setSaveIndicator(status) {
   }
 }
 
+// Carga el estado completo de la campaña desde Firestore.
+// Actualiza currentCampaignId y refresca el branding de la UI.
+// Muestra el overlay de carga mientras espera la respuesta.
 async function loadState(campaignId) {
   currentCampaignId = campaignId;
   const stateDoc = getCurrentStateDoc();
@@ -343,11 +376,16 @@ async function loadState(campaignId) {
   showLoadingOverlay(false);
 }
 
+// Activa la escucha en tiempo real de Firestore para la campaña activa.
+// Cancela y reemplaza cualquier suscripción previa (_unsubscribe).
+// Al recibir cambios externos reconstruye vistas de sesión, listas de
+// personajes/enemigos y la ficha de personaje del jugador si está visible.
 function startRealtimeSync() {
   if (_unsubscribe) _unsubscribe();
   const stateDoc = getCurrentStateDoc();
   if (!stateDoc) return;
   _unsubscribe = onSnapshot(stateDoc, snap => {
+    // Saltamos el eco de nuestro propio setDoc para evitar re-renderizados redundantes
     if (_ignoreNext) { _ignoreNext = false; return; }
     if (!snap.exists()) return;
     state = normalizeState(snap.data());
@@ -382,7 +420,9 @@ function startRealtimeSync() {
   });
 }
 
-// Simple hash (not cryptographic, but enough for local use)
+// Hash de contraseña ligero basado en FNV-1a simplificado.
+// NO es criptográfico: no usar para datos sensibles fuera de este contexto
+// de uso local/privado donde el propietario del proyecto controla Firestore.
 function hashPassword(pw) {
   let h = 0;
   for (let i = 0; i < pw.length; i++) { h = Math.imul(31, h) + pw.charCodeAt(i) | 0; }
@@ -391,6 +431,10 @@ function hashPassword(pw) {
 
 // ===========================
 //  HELPERS
+//  uid()      — genera un ID aleatorio de 8 caracteres (base-36)
+//  isDM()     — true si el usuario actual es DM y NO está en modo vista-jugador
+//  isRealDM() — true si es DM independientemente del modo de previsión
+//  getSession — acceso rápido a una sesión por ID
 // ===========================
 function uid() { return Math.random().toString(36).slice(2,10); }
 function isDM() { return currentUser && currentUser.isDM && !_playerPreview; }
@@ -399,6 +443,14 @@ function getSession(id) { return state.sessions.find(s => s.id === id); }
 
 // ===========================
 //  LOGIN / LOGOUT
+//  doLogin():
+//    1. Carga el estado de la campaña si ha cambiado
+//    2. Busca el usuario por (username + hash de contraseña) en globalUsers
+//    3. Si es válido: oculta loginscreen, construye tabs de sesión,
+//       arranca listeners en tiempo real y restaura la vista
+//  doLogout():
+//    Cancela listeners, limpia sessionStorage, restablece el estado
+//    a vacío y vuelve a mostrar la pantalla de login.
 // ===========================
 async function doLogin() {
   const campaignId = document.getElementById('login-campaign')?.value || '';
@@ -465,6 +517,10 @@ function doLogout() {
   document.getElementById('login-screen').classList.remove('hidden');
 }
 
+// Aplica la UI según el rol del usuario actual.
+//   - DM: muestra controles .dm-only-ctrl, badge "DM", botón de preview
+//   - Jugador: oculta controles de DM, muestra tab de su ficha
+// También gestiona el modo _playerPreview del DM (ver app como jugador).
 function applyRoleUI() {
   const dm = isDM();
   const realDM = isRealDM();
@@ -497,6 +553,9 @@ function applyRoleUI() {
 
 // ===========================
 //  PLAYER PREVIEW TOGGLE
+//  Permite al DM cambiar temporalmente a la perspectiva de jugador
+//  para verificar qué ve cada participante sin cerrar sesión.
+//  El flag _playerPreview hace que isDM() devuelva false.
 // ===========================
 function togglePlayerPreview() {
   if (!isRealDM()) return;
@@ -516,6 +575,9 @@ function togglePlayerPreview() {
 
 // ===========================
 //  VIEWS
+//  Sistema de vistas de página única: solo una .view tiene la clase .active
+//  en cada momento. switchView() desactiva todas y activa la solicitada.
+//  Las vistas de sesión se crean dinámicamente con buildSessionView().
 // ===========================
 function updateBreadcrumbs(viewId) {
   const current = document.getElementById('breadcrumb-current');
@@ -746,6 +808,9 @@ function renderActiveSessions() {
 
 // ===========================
 //  SESSION EDIT VIEW
+//  Vista de preparación de sesión (solo DM):
+//  Muestra actos ordenables con sus eventos aleatorios anidados,
+//  y el selector de enemigos permitidos en el combate de esa sesión.
 // ===========================
 const EDIT_CAT_COLORS = { 'Tensión':'#c86e1e','Combate':'#a02020','Social':'#3ca050','Entorno':'#3a7ab8' };
 const EDIT_CAT_BG     = { 'Tensión':'rgba(200,110,30,0.15)','Combate':'rgba(160,32,32,0.15)','Social':'rgba(60,160,80,0.15)','Entorno':'rgba(58,122,184,0.15)' };
@@ -891,6 +956,10 @@ function toggleEditEnemy(enemyId) {
 
 // ===========================
 //  SESSIONS
+//  rebuildSessionTabs(): regenera todas las vistas de sesión y restaura
+//    la vista activa previa si sigue existiendo.
+//  buildSessionView(): clona la plantilla HTML #session-view-template,
+//    la adapta al rol del usuario y la añade a #main-content.
 // ===========================
 function rebuildSessionTabs() {
   const activeView = document.querySelector('#main-content .view.active');
@@ -1093,11 +1162,13 @@ function createSession() {
 
 
 
+// Clona la plantilla #session-view-template y la configura para la sesión.
+// DM: diario editable, actos, eventos, iniciativa completa, notas privadas.
+// Jugador: diario solo lectura, iniciativa (sin PV de enemigos), cuaderno personal.
+// El clon recibe id="view-{session.id}" y se añade a #main-content.
 function buildSessionView(session) {
-  console.log('[buildSessionView] building view for session:', session.id);
   const template = document.getElementById('session-view-template');
-  console.log('[buildSessionView] template found:', template ? 'YES' : 'NO');
-  if (!template) { console.error('[buildSessionView] template not found!'); return; }
+  if (!template) return;
   
   const clone = template.cloneNode(true);
   clone.id = 'view-' + session.id;
@@ -1251,9 +1322,7 @@ function buildSessionView(session) {
     if (spectatorBtn) spectatorBtn.addEventListener('click', () => openSpectatorWindow(session.id));
   }
 
-  console.log('[buildSessionView] appending clone to main-content. Clone id:', clone.id, 'display before:', clone.style.display, 'classList:', clone.className);
   document.getElementById('main-content').appendChild(clone);
-  console.log('[buildSessionView] view appended successfully');
 }
 
 // ===========================
@@ -1431,6 +1500,13 @@ function renderRollHistory(session, el) {
 
 // ===========================
 //  COMBATANTS
+//  renderCombatantChips(): muestra chips de PJs y enemigos permitidos
+//    para añadirlos rápidamente al combate.
+//  addCombatantToSession(): agrega un combatiente libre con iniciativa
+//    aleatoria y HP manual.
+//  renderCombatantList(): renderiza las tarjetas de la lista de iniciativa.
+//    Muestra/oculta HP de enemigos según el rol.
+//    Agrupa en columnas de 6 si hay más de 6 combatientes.
 // ===========================
 function renderCombatantChips(clone, session) {
   const pjWrap = clone.querySelector('.chips-pj');
@@ -1485,6 +1561,11 @@ function addCombatantToSession(session, clone) {
   renderCombatantList(session, clone);
 }
 
+// Renderiza la lista de tarjetas de iniciativa.
+// - Jugadores solo ven HP de sus propios personajes (type==='pj' && charId === suyo).
+// - El turno activo (activeTurn sobre vivos) resalta con clase .active-turn.
+// - Con >6 combatientes agrupa en columnas de 6 (.multi-col) para aprovechar
+//   el ancho de pantalla en combates grandes.
 function renderCombatantList(session, clone) {
   const dm = isDM();
   const list = clone.querySelector('.combatant-list');
@@ -1590,6 +1671,10 @@ function renderCombatantList(session, clone) {
 
 // ===========================
 //  ENEMY STAT TOOLTIP
+//  Tooltip flotante (solo DM) que muestra la ficha completa del enemigo
+//  al pasar el ratón sobre el botón ⓘ en su tarjeta de combate.
+//  Se oculta automáticamente 150ms después de sacar el ratón
+//  (scheduleHideEnemyTooltip) a menos que se mueva al propio tooltip.
 // ===========================
 let _tooltipHideTimer = null;
 
@@ -1655,6 +1740,9 @@ function hideEnemyTooltip() {
 
 // ===========================
 //  HP MODAL
+//  Abre el modal de modificación de PV para un combatiente específico.
+//  hpRef almacena la referencia {session, idx, clone} para que
+//  applyHP/setTempHP puedan actualizar el estado y refrescar la lista.
 // ===========================
 let hpRef = null;
 function openHpModal(session, idx, clone) {
@@ -1667,6 +1755,12 @@ function openHpModal(session, idx, clone) {
   document.getElementById('temp-hp-amount-in').value = c.tempHp || 0;
   openModal('modal-hp');
 }
+// Aplica daño o curación al combatiente referenciado en hpRef.
+// Orden de absorción del daño:
+//   1. PV temporales (tempHp) se descuentan primero
+//   2. El exceso se aplica a los PV normales (no negativos)
+// Curar nunca supera el máximo (maxHp); no afecta tempHp.
+// `exact=true` fija el HP normal al valor del input sin lógica de absorción.
 function applyHP(dir, exact) {
   if (!hpRef) return;
   const {session, idx, clone} = hpRef;
@@ -1707,6 +1801,9 @@ function setTempHP() {
 
 // ===========================
 //  CONDITION MODAL
+//  Muestra chips de los estados definidos en Mantenimiento > Estados.
+//  Si no hay estados personalizados usa 8 estados por defecto.
+//  Los estados seleccionados se añaden a combatants[idx].conditions[]
 // ===========================
 let condRef = null;
 function openCondModal(session, idx, clone) {
@@ -1742,6 +1839,8 @@ function addConditionConfirm() {
 
 // ===========================
 //  ESTADOS MAINTENANCE
+//  Lista simple de nombres de estado. Si está vacía, renderCondChips()
+//  usa los 8 estados predeterminados del sistema.
 // ===========================
 function renderEstadoList() {
   const list = document.getElementById('estado-list');
@@ -1789,6 +1888,9 @@ function deleteEstado(id) {
 
 // ===========================
 //  ACTOS MAINTENANCE
+//  Los actos se listan agrupados por sesión en un árbol colapsable.
+//  El campo `order` (entero) determina el orden dentro de la sesión;
+//  moveActo() normaliza y permuta los índices de orden.
 // ===========================
 let editingActoId = null;
 
@@ -1914,6 +2016,9 @@ function deleteActo(id) {
 
 // ===========================
 //  EVENTOS ALEATORIOS
+//  Los eventos se anidan bajo Sesión > Acto en un árbol colapsable.
+//  Durante la sesión, wireSessionEventos() permite sacar uno al azar
+//  filtrado por categoría y el acto actualmente desplegado.
 // ===========================
 let editingEventoId = null;
 
@@ -2265,11 +2370,12 @@ function renderPlayerCharPanel(char) {
   // Legacy — no longer used, kept for compat
 }
 
+// Renderiza la ficha de personaje de solo lectura en la vista de jugador.
+// Si el personaje aún no ha cargado (chars vacío con charId asignado)
+// muestra un mensaje de espera en vez del error de "sin personaje".
 function renderCharSheetView(char) {
-  console.log('[renderCharSheetView] called with:', char ? char.name : 'null');
   const view = document.getElementById('charsheet-content');
-  console.log('[renderCharSheetView] view element:', view);
-  if (!view) { console.error('[renderCharSheetView] #charsheet-content NOT FOUND in DOM'); return; }
+  if (!view) return;
   if (!char) {
     // Diagnostic: if user has a charId but char wasn't found, show helpful message
     const hasId = currentUser && currentUser.charId;
@@ -2637,6 +2743,10 @@ document.addEventListener('click', e=>{
 
 // ===========================
 //  EXPORT / IMPORT
+//  exportData(): vuelca todo el estado a un JSON descargable.
+//  importData(): restaura el estado desde un JSON exportado previamente;
+//    fusiona los usuarios del backup con los usuarios globales actuales
+//    antes de sobreescribir el estado en Firestore.
 // ===========================
 function exportData() {
   state.sessions.forEach(session=>{
@@ -2694,6 +2804,9 @@ function importData(event) {
 
 // ===========================
 //  LOADING OVERLAY
+//  Overlay de pantalla completa (z-index:3000) creado dinámicamente la primera
+//  vez que se llama, reutilizado en llamadas posteriores.
+//  Visible al cargar la campaña (loadState) para evitar parpadeos de UI.
 // ===========================
 function showLoadingOverlay(show) {
   let el = document.getElementById('loading-overlay');
@@ -2714,6 +2827,9 @@ function showLoadingOverlay(show) {
 
 // ===========================
 //  SPECTATOR
+//  Modo de solo lectura para compartir en pantalla.
+//  openSpectatorWindow() abre esta misma URL con parámetros
+//  ?spectator=ID&campaign=ID en una pestaña nueva.
 // ===========================
 function renderSpectatorView(sessionId) {
   const container = document.getElementById('spectator-view');
@@ -2733,7 +2849,15 @@ function openSpectatorWindow(sessionId) {
 }
 
 // ===========================
-//  INIT
+//  ARRANQUE (IIFE)
+//  Secuencia de inicialización al cargar la página:
+//  1. Detectar modo espectador (?spectator=ID): si es cierto, mostrar
+//     la vista de iniciativa en tiempo real sin login y salir.
+//  2. Cargar catálogo de campañas y usuarios globales (con migración
+//     automática desde el modelo legado si es necesario).
+//  3. Rellenar el selector de campañas en el login.
+//  4. Restaurar la sesión previa guardada en sessionStorage
+//     (campdëa y usuario) para no forzar login tras un refresco.
 // ===========================
 (async () => {
   // Spectator mode: show initiative-only view without login
@@ -2806,6 +2930,8 @@ function openSpectatorWindow(sessionId) {
   renderCampaignList();
 })();
 
+// Búsqueda en tiempo real en las listas de mantenimiento.
+// Oculta las tarjetas (.entity-card) cuyo texto no incluya la consulta.
 function filterList(query, listId) {
   const list = document.getElementById(listId);
   if (!list) return;
@@ -2815,6 +2941,9 @@ function filterList(query, listId) {
   });
 }
 
+// Diálogo de confirmación genérico para acciones destructivas.
+// Clonar el botón "ok" elimina los event listeners previos para evitar
+// que callbacks de otra acción anterior se ejecuten por acumulación.
 function showConfirm(msg, onOk, title = 'Confirmar acción') {
   document.getElementById('modal-confirm-title').textContent = title;
   document.getElementById('modal-confirm-msg').textContent = msg;
@@ -2827,6 +2956,9 @@ function showConfirm(msg, onOk, title = 'Confirmar acción') {
 
 // ===========================
 //  TOAST NOTIFICATIONS
+//  Notificaciones efímeras en la esquina inferior derecha.
+//  Tipos: 'success' (verde), 'error' (rojo), 'info' (dorado).
+//  Auto-eliminadas a los 2.65s (animación CSS de 2.3s + margen).
 // ===========================
 function showToast(msg, type = 'success') {
   const container = document.getElementById('toast');
@@ -2840,7 +2972,10 @@ function showToast(msg, type = 'success') {
 }
 
 // ===========================
-//  EXPOSE GLOBALS (required for type="module" scope)
+//  EXPOSE GLOBALS
+//  Los módulos ES (type="module") tienen su propio scope; los handlers
+//  onclick del HTML no pueden llamar funciones del módulo directamente.
+//  Exponerlas en `window` (alias `_g`) las hace accesibles globalmente.
 // ===========================
 const _g = window;
 _g.doLogin               = doLogin;

@@ -10,7 +10,12 @@
 </head>
 <body>
 
-<!-- ===== LOGIN ===== -->
+<!-- ===== LOGIN =====
+     Pantalla superpuesta (z-index:2000) con selección de campaña,
+     usuario y contraseña. Se oculta tras un login exitoso con
+     la clase .hidden. El DM ve todas las campañas; los jugadores
+     solo las activas (no archivadas).
+     ============================= -->
 <div id="login-screen">
   <div class="login-box">
     <div class="login-crest">
@@ -36,7 +41,10 @@
   </div>
 </div>
 
-<!-- ===== APP ===== -->
+<!-- ===== APP =====
+     Cabecera fija con el nombre de la campaña, indicador de guardado,
+     modo de usuario logueado y botón de "Vista jugador" (solo DM).
+     ============================= -->
 <header id="app-header">
   <div>
     <h1 id="brand-header">Mesa de Juego</h1>
@@ -198,7 +206,15 @@
 
 </div>
 
-<!-- ===== SESSION VIEW TEMPLATE ===== -->
+<!-- ===== PLANTILLA DE SESIÓN =====
+     Este div permanece oculto en el DOM. buildSessionView() lo clona con
+     cloneNode(true) para cada sesión activa y lo adapta según el rol:
+       - DM:      acceso al diario (editable), actos, eventos aleatorios,
+                  gestor de iniciativa completo y notas privadas.
+       - Jugador: diario en solo lectura, iniciativa visible (solo PV propios),
+                  cuaderno personal (persistido por ID de usuario).
+     El clon recibe id="view-{sessionId}" y data-session-id="{sessionId}".
+     ============================= -->
 <div id="session-view-template" style="display:none">
   <div class="session-grid">
     <!-- DIARIO (fila completa) -->
@@ -332,7 +348,14 @@
 
 <!-- ===== MODALS ===== -->
 
-<!-- NUEVA SESIÓN -->
+<!-- ===== MODALES =====
+     Los modales son divs .modal-overlay con display:none por defecto.
+     La clase .open (añadida vía openModal/closeModal en app.js)
+     cambia a display:flex para mostrarlos con backdrop blur.
+     ============================= -->
+
+<!-- MODAL: Nueva sesión — formulario rápido para crear una sesión con nombre.
+     Pulsar Enter en el input también ejecuta createSession(). -->
 <div id="modal-new-session" class="modal-overlay">
   <div class="modal" style="max-width:400px">
     <div class="modal-header"><span>Nueva Sesión</span><button class="modal-close" onclick="closeModal('modal-new-session')">✕</button></div>
@@ -347,7 +370,9 @@
   </div>
 </div>
 
-<!-- USUARIO -->
+<!-- MODAL: Gestión de usuarios — crea o edita un usuario DM o jugador.
+     Incluye asignación de personaje (solo si no es DM).
+     La contraseña se guarda como hash ligero; no es criptográfica. -->
 <div id="modal-user" class="modal-overlay">
   <div class="modal" style="max-width:420px">
     <div class="modal-header"><span id="modal-user-title">Nuevo Usuario</span><button class="modal-close" onclick="closeModal('modal-user')">✕</button></div>
@@ -379,7 +404,9 @@
   </div>
 </div>
 
-<!-- PERSONAJE -->
+<!-- MODAL: Ficha completa de personaje — identidad, atributos (FUE/INT/CAR/DES/VIDA),
+     recursos (PM, oro, puntos de habilidad, armadura), habilidades con coste
+     (1 / 5 / 15 pts), habilidades especiales con nivel y mochila + notas. -->
 <div id="modal-char" class="modal-overlay">
   <div class="modal" style="max-width:720px">
     <div class="modal-header"><span id="modal-char-title">Nuevo Personaje</span><button class="modal-close" onclick="closeModal('modal-char')">✕</button></div>
@@ -434,7 +461,9 @@
   </div>
 </div>
 
-<!-- ENEMIGO -->
+<!-- MODAL: Tipo de enemigo — plantilla reutilizable para añadir al gestor de
+     iniciativa. Los PV definidos aquí son los máximos por defecto al añadir
+     una instancia al combate. Solo visible para el DM. -->
 <div id="modal-enemy" class="modal-overlay">
   <div class="modal" style="max-width:560px">
     <div class="modal-header"><span id="modal-enemy-title">Nuevo Tipo de Enemigo</span><button class="modal-close" onclick="closeModal('modal-enemy')">✕</button></div>
@@ -464,7 +493,9 @@
   </div>
 </div>
 
-<!-- HP -->
+<!-- MODAL: Modificar PV — el daño descuenta primero los PV temporales (tempHp)
+     antes de reducir los PV normales. Curar nunca supera el máximo.
+     "Establecer valor exacto" fija el HP normal directamente. -->
 <div id="modal-hp" class="modal-overlay">
   <div class="modal" style="max-width:320px">
     <div class="modal-header"><span id="modal-hp-title">Modificar PV</span><button class="modal-close" onclick="closeModal('modal-hp')">✕</button></div>
@@ -487,7 +518,9 @@
   </div>
 </div>
 
-<!-- CONDICIÓN -->
+<!-- MODAL: Condición de combate — permite seleccionar un estado predefinido
+     (de la lista en Mantenimiento > Estados) o escribir uno libre.
+     Los estados se muestran como chips en la tarjeta del combatiente. -->
 <div id="modal-cond" class="modal-overlay">
   <div class="modal" style="max-width:360px">
     <div class="modal-header"><span>Añadir Condición</span><button class="modal-close" onclick="closeModal('modal-cond')">✕</button></div>
@@ -502,7 +535,10 @@
   </div>
 </div>
 
-<!-- ACTO -->
+<!-- MODAL: Acto de sesión — unidad narrativa dentro de una sesión.
+     Contiene contenido público (visible para jugadores al publicar)
+     y contenido privado (chuleta del DM). Los actos se ordenan
+     arrastrando en la vista de edición de sesión. -->
 <div id="modal-acto" class="modal-overlay">
   <div class="modal" style="max-width:620px">
     <div class="modal-header"><span id="modal-acto-title">Nuevo Acto</span><button class="modal-close" onclick="closeModal('modal-acto')">✕</button></div>
@@ -531,7 +567,9 @@
   </div>
 </div>
 
-<!-- EVENTO ALEATORIO -->
+<!-- MODAL: Evento aleatorio — fragmento de contenido ligado a un acto y sesión.
+     Al pulsar una categoría en el panel de sesión, se escoge un evento
+     aleatorio de ese acto y esa categoría. "Publicar" lo copia al diario. -->
 <div id="modal-evento" class="modal-overlay">
   <div class="modal" style="max-width:620px">
     <div class="modal-header"><span id="modal-evento-title">Nuevo Evento Aleatorio</span><button class="modal-close" onclick="closeModal('modal-evento')">✕</button></div>
@@ -575,7 +613,9 @@
   </div>
 </div>
 
-<!-- PREPARAR COMBATES -->
+<!-- MODAL: Preparar combates — selecciona qué tipos de enemigos estarán
+     disponibles en el gestor de iniciativa para esta sesión.
+     Solo los enemigos seleccionados aparecerán como chips en el panel. -->
 <div id="modal-prepare-combats" class="modal-overlay">
   <div class="modal" style="max-width:520px">
     <div class="modal-header"><span id="modal-prepare-combats-title">⚔️ Preparar Combates</span><button class="modal-close" onclick="closeModal('modal-prepare-combats')">✕</button></div>
@@ -591,7 +631,9 @@
   </div>
 </div>
 
-<!-- CAMPAÑA -->
+<!-- MODAL: Nueva campaña — crea un documento nuevo en Firestore con ID único
+     derivado del nombre (slugificado). Opcionalmente clona el estado
+     actual de la campaña abierta (sin usuarios). -->
 <div id="modal-campaign" class="modal-overlay">
   <div class="modal" style="max-width:480px">
     <div class="modal-header"><span>Nueva Campaña</span><button class="modal-close" onclick="closeModal('modal-campaign')">✕</button></div>
@@ -613,7 +655,9 @@
   </div>
 </div>
 
-<!-- MODAL CONFIRMACIÓN -->
+<!-- MODAL: Confirmación genérica — reutilizado por todas las acciones destructivas
+     (borrar sesión, personaje, etc.). El botón "Confirmar" ejecuta el
+     callback pasado a showConfirm() en app.js. -->
 <div id="modal-confirm" class="modal-overlay">
   <div class="modal" style="max-width:400px">
     <div class="modal-header"><span id="modal-confirm-title">Confirmar acción</span><button class="modal-close" onclick="closeModal('modal-confirm')">✕</button></div>
@@ -627,7 +671,12 @@
   </div>
 </div>
 
-<!-- ===== VISTA ESPECTADOR (sin login, para compartir pantalla) ===== -->
+<!-- ===== VISTA ESPECTADOR =====
+     Solo visible cuando la URL incluye ?spectator=SESSION_ID.
+     Muestra el gestor de iniciativa en modo lectura, sin login ni
+     controles de DM. Ideal para compartir en pantalla durante el combate.
+     La función openSpectatorWindow() abre esta misma página en pestaña nueva.
+     ============================= -->
 <div id="spectator-view" style="display:none">
   <div class="spectator-header">
     <div>

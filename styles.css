@@ -1,4 +1,9 @@
-/* ===== DESIGN TOKENS ===== */
+/* ===== DESIGN TOKENS =====
+   Variables globales de diseño. Cambiar estos valores aquí
+   actualiza automáticamente toda la interfaz.
+   Los alias --parchment/--ink existen para compatibilidad
+   con referencias antiguas en el HTML.
+   ============================= */
 :root {
   /* Backgrounds */
   --bg-base:    #222C40;
@@ -42,21 +47,24 @@
   --shadow-lg:  0 8px 48px rgba(0,0,0,0.95);
   --shadow-gold:0 0 20px rgba(217,189,137,0.18);
 
-  /* Radii */
+  /* Radios de borde — escala coherente en toda la UI */
   --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;
   --radius-xl: 14px;
 
-  /* Transitions */
+  /* Transiciones — --t para hover rápido, --t-slow para animaciones de entrada */
   --t:      0.18s ease;
   --t-slow: 0.28s ease;
 }
 
 /* ===== RESET ===== */
+/* Normalización básica: box-model consistente, sin márgenes por defecto */
 *{box-sizing:border-box;margin:0;padding:0;}
 
+/* Fondo de 3 capas: 1) ruido SVG sutil para textura orgánica,
+   2-3) gradientes radiales en esquinas para profundidad */
 body{
   background-color:var(--bg-base);
   background-image:
@@ -339,7 +347,12 @@ body.spectator-mode #main-content { display:none !important; }
 .spectator-body .combatant-list { display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start; }
 .spectator-body .combatant-column { display:flex;flex-direction:column;gap:10px;flex:1;min-width:260px; }
 
-/* ===== SESSION GRID ===== */
+/* ===== SESSION GRID =====
+   Rejilla principal de la vista de sesión:
+   Col 1 (56px): botones de herramientas verticales
+   Col 2-3 (1fr cada una): diario/actos y panel de iniciativa
+   En modo jugador (.player-grid) solo 2 columnas (sin actos/eventos)
+   ============================= */
 .session-grid{display:grid;grid-template-columns:56px 1fr 1fr;gap:18px;}
 #panel-diary{grid-column:1/3;grid-row:1;display:flex;flex-direction:column;}
 #panel-diary .panel-body{flex:1;display:flex;flex-direction:column;padding-bottom:14px;}
@@ -501,6 +514,8 @@ body.spectator-mode #main-content { display:none !important; }
   .combatant-list.multi-col .dead-btns-corner {grid-column:4;grid-row:1/3;justify-self:end;align-self:center;}
   .combatant-list.multi-col .conditions-wrap  {grid-column:1/-1;grid-row:3;}
 }
+/* Tarjeta de combatiente: 5 columnas —
+   [32px iniciativa] [nombre] [barra HP] [botones +/-] [botón muerto/eliminar] */
 .combatant-card{
   display:grid;grid-template-columns:32px minmax(90px,1fr) minmax(130px,1fr) auto auto;
   align-items:center;gap:8px;padding:9px 14px;
@@ -531,6 +546,7 @@ body.spectator-mode #main-content { display:none !important; }
 .c-type{font-size:.62rem;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);display:block;font-family:'Crimson Text',serif;}
 .hp-bar-wrap{display:flex;flex-direction:column;gap:3px;}
 .hp-bar-track{height:5px;background:rgba(166,151,123,0.12);border-radius:3px;overflow:hidden;}
+/* Barra de vida: rojo crítico (<25%), naranja bajo (25-60%), verde ok (>60%) */
 .hp-bar-fill{height:100%;background:linear-gradient(90deg,#a02020,#cc3030);border-radius:3px;transition:width .3s ease;}
 .hp-bar-fill.ok{background:linear-gradient(90deg,#256a2e,#32903e);}
 .hp-bar-fill.low{background:linear-gradient(90deg,var(--warning),#d88020);}
@@ -616,6 +632,7 @@ body.spectator-mode #main-content { display:none !important; }
 .form-input::placeholder{color:var(--text-muted);}
 .form-input:focus{border-color:var(--gold-light);box-shadow:0 0 0 3px rgba(166,151,123,0.12);}
 .form-input-sm{width:70px;}.form-input-md{width:130px;}
+/* Select personalizado: oculta la flecha nativa y pinta una SVG en color dorado */
 select.form-input{
   appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c89a38'/%3E%3C/svg%3E");
@@ -779,6 +796,7 @@ select.form-input option{background:#222C40;color:#F2DEA0;}
   font-size:.68rem;font-family:'Cinzel',serif;color:var(--text-muted);
   cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t);
 }
+/* Niveles de habilidad: 1 pt (básico), 5 pts (entrenado), 15 pts (maestro) */
 .cost-btn.sel1{background:rgba(166,151,123,.2);border-color:var(--gold-border-strong);color:var(--text);}
 .cost-btn.sel5{background:rgba(166,151,123,.38);border-color:var(--gold-light);color:var(--gold-light);font-weight:700;}
 .cost-btn.sel15{background:var(--gold);border-color:var(--gold-bright);color:#222C40;font-weight:700;}
@@ -819,7 +837,16 @@ select.form-input option{background:#222C40;color:#F2DEA0;}
   color:var(--text-muted);font-style:italic;text-align:center;
 }
 
-/* ===== MODALS ===== */
+/* ===== MODALS =====
+   Capas z-index del sistema:
+     500  — overlay de modales
+     700  — barra de herramientas fija en móvil
+     800  — tooltip de ficha de enemigo y popups de sesión
+     2000 — pantalla de login
+     3000 — overlay de carga (showLoadingOverlay)
+     9999 — notificaciones toast
+   El overlay usa backdrop-filter:blur para oscurecer sin bloquear visualmente el fondo.
+   ============================= */
 .modal-overlay{
   display:none;position:fixed;inset:0;
   background:rgba(20,28,42,0.88);backdrop-filter:blur(6px);
@@ -871,11 +898,14 @@ select.form-input option{background:#222C40;color:#F2DEA0;}
 ::-webkit-scrollbar-thumb{background:rgba(166,151,123,0.32);border-radius:3px;}
 ::-webkit-scrollbar-thumb:hover{background:rgba(166,151,123,0.55);}
 
-/* ===== ROLE BADGES ===== */
+/* ===== ROLE BADGES =====
+   .dm-only-ctrl  — oculto para jugadores vía JS (applyRoleUI)
+   .player-hide   — siempre oculto para jugadores; no se toca desde JS
+   ============================= */
 .role-dm{color:var(--gold-bright)!important;}
 .role-player{color:var(--text-muted)!important;}
-.dm-only-ctrl{} /* visible to DM */
-.player-hide{display:none!important;}
+.dm-only-ctrl{} /* visible para el DM; ocultado en applyRoleUI() si el usuario es jugador */
+.player-hide{display:none!important;} /* forzar oculto para vistas de jugador */
 
 /* ===== PREVIEW TOGGLE ===== */
 .preview-toggle{
@@ -902,7 +932,11 @@ select.form-input option{background:#222C40;color:#F2DEA0;}
 /* Inline checkbox accent */
 input[type=checkbox]{accent-color:var(--gold-light);}
 
-/* ===== RESPONSIVE ===== */
+/* ===== RESPONSIVE =====
+   900px — tablet: sesión pasa a columna única; iniciativa reubicada
+   600px — móvil: modales como bottom-sheet, barra de herramientas fija al fondo
+   380px — móvil pequeño: rejillas de atributos a 3 columnas
+   ============================= */
 @media (max-width: 900px) {
   #app-header{padding:10px 18px 8px;}
   #app-header h1{font-size:1.45rem;}
@@ -913,7 +947,7 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   #panel-actos{grid-column:1;grid-row:auto;}
   #panel-eventos-session{grid-column:1;grid-row:auto;}
   #panel-init{grid-column:1;grid-row:auto;}
-  /* A: DM tool-btns as bottom bar on mobile */
+  /* En móvil: los botones de herramientas del DM se convierten en barra inferior fija */
   .session-grid:not(.player-grid) .session-tool-btns{
     position:fixed;bottom:0;left:0;right:0;z-index:700;
     flex-direction:row;justify-content:center;gap:14px;
@@ -1072,6 +1106,8 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .charsheet-attrs{grid-template-columns:repeat(3,1fr)!important;}
 }
 
+/* Indicador visual de visibilidad: borde verde = publicada (jugadores pueden verla),
+   borde gris/opaco = no publicada (solo visible para el DM) */
 .session-card--published{
   border-left:3px solid rgba(58,148,72,0.7);
   background:linear-gradient(90deg,rgba(28,60,32,0.35) 0%,transparent 60%);
