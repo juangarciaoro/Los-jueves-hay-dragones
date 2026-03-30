@@ -405,10 +405,11 @@ async function doLogin() {
   const username = document.getElementById('login-user').value.trim();
   const password = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-error');
-  if (!campaignId) { errEl.textContent = 'Selecciona una campana.'; return; }
+  const hasActiveCampaigns = campaigns.some(c => !c.archived);
+  if (!campaignId && hasActiveCampaigns) { errEl.textContent = 'Selecciona una campana.'; return; }
   if (!username || !password) { errEl.textContent = 'Introduce usuario y contraseña.'; return; }
 
-  if (currentCampaignId !== campaignId) {
+  if (campaignId && currentCampaignId !== campaignId) {
     await loadState(campaignId);
   }
 
@@ -419,7 +420,7 @@ async function doLogin() {
   errEl.textContent = '';
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('login-pass').value = '';
-  sessionStorage.setItem('ljhd_campaign', campaignId);
+  if (campaignId) sessionStorage.setItem('ljhd_campaign', campaignId);
   sessionStorage.setItem('ljhd_user', user.id);
   applyRoleUI();
   rebuildSessionTabs();
@@ -427,11 +428,20 @@ async function doLogin() {
   renderEnemyList();
   renderUserList();
   renderCampaignList();
-  
-  // Show landing page first
-  switchView('landing');
-  
-  startRealtimeSync(); // start AFTER view is rendered
+
+  // If no campaign selected: DM goes to maintenance to unarchive/create; players see an error
+  if (!campaignId) {
+    if (!user.isDM) {
+      currentUser = null;
+      document.getElementById('login-screen').classList.remove('hidden');
+      errEl.textContent = 'No hay campañas activas. Contacta al Director de Juego.';
+      return;
+    }
+    switchView('maint');
+  } else {
+    switchView('landing');
+    startRealtimeSync();
+  }
   startUsersRealtimeSync();
 }
 
@@ -2516,24 +2526,22 @@ function renderCampaignList() {
     const card = document.createElement('div');
     card.className = 'entity-card';
     const isCurrent = c.id === currentCampaignId;
-    const activeCount = campaigns.filter(x => !x.archived).length;
-    const canArchive = !isCurrent && (!c.archived || activeCount > 1);
     const status = c.archived ? 'Archivada' : 'Activa';
 
-    const switchBtn = c.archived
-      ? ''
-      : `<button class="btn btn-outline btn-sm" onclick="switchToCampaign('${c.id}')">Abrir</button>`;
-    const archiveBtn = canArchive
-      ? `<button class="btn btn-outline btn-sm" onclick="toggleCampaignArchived('${c.id}')">${c.archived ? 'Reactivar' : 'Archivar'}</button>`
+    // DM can open any campaign (active or archived); non-DM only sees active ones
+    const canOpen = isDM() || !c.archived;
+    const switchBtn = canOpen
+      ? `<button class="btn btn-outline btn-sm" onclick="switchToCampaign('${c.id}')">${isCurrent ? 'Actual' : 'Abrir'}</button>`
       : '';
+    const archiveBtn = `<button class="btn btn-outline btn-sm" onclick="toggleCampaignArchived('${c.id}')">${c.archived ? 'Reactivar' : 'Archivar'}</button>`;
 
     card.innerHTML = `
       <div class="entity-card-info">
-        <span class="entity-name">${c.name}${isCurrent ? ' · Actual' : ''}</span>
+        <span class="entity-name">${c.name}${isCurrent ? ' · Actual' : ''}${c.archived ? ' <span style="font-size:.6rem;color:var(--text-muted);letter-spacing:1px">[ARCHIVADA]</span>' : ''}</span>
         <span class="entity-meta">ID: ${c.id} · ${status}</span>
       </div>
       <div class="entity-actions">
-        ${switchBtn}
+        ${isCurrent ? '' : switchBtn}
         ${archiveBtn}
       </div>`;
     list.appendChild(card);
@@ -2571,15 +2579,17 @@ async function saveCampaign() {
 async function toggleCampaignArchived(campaignId) {
   const c = campaigns.find(x => x.id === campaignId);
   if (!c) return;
+  const wasArchived = c.archived;
   c.archived = !c.archived;
   await saveCampaignCatalog();
   renderCampaignSelect();
   renderCampaignList();
   renderMaintLanding();
+  showToast(wasArchived ? `"${c.name}" reactivada` : `"${c.name}" archivada`, 'info');
 }
 
 async function switchToCampaign(campaignId) {
-  if (!campaigns.some(c => c.id === campaignId && !c.archived)) return;
+  if (!campaigns.some(c => c.id === campaignId)) return;
   if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
   sessionStorage.setItem('ljhd_campaign', campaignId);
   sessionStorage.removeItem('ljhd_user');
