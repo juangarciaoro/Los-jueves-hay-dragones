@@ -1207,3 +1207,57 @@ input[type=checkbox]{accent-color:var(--gold-light);}
 }
 .enemy-info-btn:hover{background:rgba(200,110,30,0.25);border-color:rgba(200,110,30,0.8);color:var(--gold-light);}
 .combatant-card.type-enemy .dead-btns-corner{margin-right:22px;}
+
+/* ===== ACTO IMAGE UPLOAD =====
+   Zona de carga en el modal de acto: drag / clic para seleccionar.
+   La imagen se comprime en el cliente (canvas, JPEG 0.75) antes de
+   guardarse como base64 en el objeto acto en Firestore. */
+.acto-img-upload{
+  border:2px dashed var(--border);border-radius:var(--radius-md);
+  padding:14px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  transition:border-color var(--t);
+}
+.acto-img-upload:hover{border-color:var(--gold);}
+.acto-img-placeholder{color:var(--text-muted);font-family:'Crimson Text',serif;font-size:.95rem;}
+.acto-img-preview{
+  max-width:100%;max-height:200px;border-radius:var(--radius-sm);
+  object-fit:contain;pointer-events:none;
+}
+/* Miniatura en el acordeón de actos dentro de la vista de sesión */
+.acto-img-thumb{
+  width:100%;max-height:160px;object-fit:contain;
+  border-radius:var(--radius-sm);border:1px solid var(--border);
+  margin-top:6px;cursor:pointer;transition:border-color var(--t);
+}
+.acto-img-thumb:hover{border-color:var(--gold);}
+
+/* ===== DIARY IMAGE GALLERY =====
+   Galería de imágenes publicadas en el diario de campaña.
+   Visible para todos los usuarios; el DM puede retirar entradas. */
+.diary-gallery-wrap{
+  margin-top:12px;padding-top:10px;
+  border-top:1px solid var(--border);
+}
+.diary-gallery-title{
+  font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:2px;
+  text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;
+}
+.diary-gallery-grid{display:flex;flex-wrap:wrap;gap:10px;}
+.diary-gallery-item{position:relative;display:flex;flex-direction:column;align-items:center;}
+.diary-gallery-img{
+  max-width:180px;max-height:140px;object-fit:contain;
+  border-radius:var(--radius-sm);border:1px solid var(--border);
+  cursor:pointer;transition:border-color var(--t);
+}
+.diary-gallery-img:hover{border-color:var(--gold);}
+.diary-gallery-caption{
+  font-family:'Crimson Text',serif;font-size:.78rem;color:var(--text-muted);
+  text-align:center;margin-top:3px;max-width:180px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.diary-gallery-remove{
+  position:absolute;top:3px;right:3px;
+  padding:1px 5px;font-size:.68rem;line-height:1.3;opacity:.7;
+}
+.diary-gallery-remove:hover{opacity:1;}

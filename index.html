@@ -223,6 +223,11 @@
       <div class="panel-body">
         <input class="session-title-input" placeholder="Título de la sesión…" data-session-name readonly>
         <textarea class="note-area" placeholder="Resumen y eventos importantes…" data-field="diary"></textarea>
+        <!-- Galería de imágenes publicadas desde los actos (visible para todos los usuarios) -->
+        <div class="diary-gallery-wrap" style="display:none">
+          <div class="diary-gallery-title">📷 IMÁGENES DEL DIARIO</div>
+          <div class="diary-gallery-grid"></div>
+        </div>
       </div>
     </div>
     <!-- ACTOS (solo DM, fila 1 columna derecha) -->
@@ -558,6 +563,15 @@
       <div class="form-group">
         <label class="flabel">Contenido privado (chuleta DM)</label>
         <textarea id="af-private" class="note-area" style="min-height:90px" placeholder="Notas internas del DM…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="flabel">Imagen (opcional)</label>
+        <div class="acto-img-upload" id="af-img-drop">
+          <input type="file" id="af-image" accept="image/*" style="display:none">
+          <span class="acto-img-placeholder" id="af-img-placeholder">📷 Clic para subir imagen</span>
+          <img id="af-img-preview" class="acto-img-preview" style="display:none" alt="Vista previa">
+          <button type="button" class="btn btn-outline btn-sm" id="af-img-clear" style="display:none" onclick="clearActoImage()">✕ Quitar</button>
+        </div>
       </div>
     </div>
     <div class="modal-footer">

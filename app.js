@@ -1321,7 +1321,7 @@ function buildSessionView(session) {
     const spectatorBtn = clone.querySelector('.btn-spectator');
     if (spectatorBtn) spectatorBtn.addEventListener('click', () => openSpectatorWindow(session.id));
   }
-
+  renderSessionGallery(session, clone);
   document.getElementById('main-content').appendChild(clone);
 }
 
@@ -1455,6 +1455,29 @@ function renderSessionActos(session, clone) {
     body.appendChild(pubArea);
     body.appendChild(privLabel);
     body.appendChild(privArea);
+
+    // Imagen del acto: thumbnail + botón para publicarla en el diario de la sesión
+    if (acto.image) {
+      const imgRow = document.createElement('div');
+      imgRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;';
+      const imgLabel = document.createElement('label');
+      imgLabel.className = 'flabel'; imgLabel.style.margin = '0';
+      imgLabel.textContent = '🖼️ Imagen';
+      imgRow.appendChild(imgLabel);
+      if (isDM()) {
+        const imgPubBtn = document.createElement('button');
+        imgPubBtn.className = 'btn btn-outline btn-sm';
+        imgPubBtn.textContent = '📷 Publicar imagen';
+        imgPubBtn.addEventListener('click', () => publishActoImage(session, acto, clone));
+        imgRow.appendChild(imgPubBtn);
+      }
+      const thumbnail = document.createElement('img');
+      thumbnail.src = acto.image; thumbnail.alt = acto.title;
+      thumbnail.className = 'acto-img-thumb';
+      thumbnail.addEventListener('click', () => openGalleryLightbox(acto.image, acto.title));
+      body.appendChild(imgRow);
+      body.appendChild(thumbnail);
+    }
 
     header.addEventListener('click', () => {
       const open = body.style.display !== 'none';
@@ -1893,6 +1916,7 @@ function deleteEstado(id) {
 //  moveActo() normaliza y permuta los índices de orden.
 // ===========================
 let editingActoId = null;
+let _editingActoImage = null; // base64 de la imagen del acto en edición
 
 function renderActoList() {
   const list = document.getElementById('acto-list');
@@ -1970,6 +1994,24 @@ function openActoModal(id, preSessionId) {
   document.getElementById('af-title').value = a ? a.title : '';
   document.getElementById('af-public').value = a ? (a.public || '') : '';
   document.getElementById('af-private').value = a ? (a.private || '') : '';
+  // Imagen
+  const _preview   = document.getElementById('af-img-preview');
+  const _pholder   = document.getElementById('af-img-placeholder');
+  const _clearBtn  = document.getElementById('af-img-clear');
+  const _fileInput = document.getElementById('af-image');
+  _editingActoImage = a?.image || null;
+  if (_editingActoImage) {
+    _preview.src = _editingActoImage; _preview.style.display = '';
+    _pholder.style.display = 'none';  _clearBtn.style.display = '';
+  } else {
+    _preview.src = ''; _preview.style.display = 'none';
+    _pholder.style.display = '';      _clearBtn.style.display = 'none';
+  }
+  _fileInput.value = '';
+  _fileInput.onchange = handleActoImageSelect;
+  document.getElementById('af-img-drop').onclick = (e) => {
+    if (!e.target.closest('#af-img-clear')) _fileInput.click();
+  };
   openModal('modal-acto');
 }
 
@@ -1981,11 +2023,20 @@ function saveActo() {
     sessionId,
     title,
     public:  document.getElementById('af-public').value.trim(),
-    private: document.getElementById('af-private').value.trim()
+    private: document.getElementById('af-private').value.trim(),
+    image:   _editingActoImage || null
   };
   if (editingActoId) {
     const idx = state.actos.findIndex(a => a.id === editingActoId);
-    if (idx !== -1) state.actos[idx] = { id: editingActoId, ...obj };
+    if (idx !== -1) {
+      // Si se quitó la imagen, retirarla también del diario de cualquier sesión
+      if (!obj.image) {
+        state.sessions.forEach(s => {
+          if (s.publishedImages) s.publishedImages = s.publishedImages.filter(i => i.actoId !== editingActoId);
+        });
+      }
+      state.actos[idx] = { id: editingActoId, ...obj };
+    }
   } else {
     const maxOrder = state.actos.filter(a => a.sessionId === obj.sessionId)
       .reduce((m, a) => Math.max(m, a.order ?? 0), -1);
@@ -1998,7 +2049,7 @@ function saveActo() {
   if (_editSessionId) renderSessionEditView();
   document.querySelectorAll('.view[data-session-id]').forEach(view => {
     const s = state.sessions.find(x => x.id === view.dataset.sessionId);
-    if (s) renderSessionActos(s, view);
+    if (s) { renderSessionActos(s, view); renderSessionGallery(s, view); }
   });
 }
 
@@ -2006,12 +2057,130 @@ function deleteActo(id) {
   showConfirm('¿Eliminar acto? Los eventos asociados perderán su referencia.', () => {
   const idx = state.actos.findIndex(a => a.id === id);
   if (idx === -1) return;
+  // Retirar la imagen del acto del diario de cualquier sesión
+  state.sessions.forEach(s => {
+    if (s.publishedImages) s.publishedImages = s.publishedImages.filter(i => i.actoId !== id);
+  });
   state.actos.splice(idx, 1);
   saveState();
   renderActoList();
   if (_editSessionId) renderSessionEditView();
+  // Refrescar galerías de sesiones abiertas
+  document.querySelectorAll('.view[data-session-id]').forEach(view => {
+    const s = state.sessions.find(x => x.id === view.dataset.sessionId);
+    if (s) renderSessionGallery(s, view);
+  });
   showToast('Acto eliminado', 'info');
   }, 'Eliminar acto');
+}
+
+// Selecciona y comprime (máx 900 px, JPEG q0.75) una imagen local para un acto.
+function handleActoImageSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 900;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+        else        { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const data = canvas.toDataURL('image/jpeg', 0.75);
+      _editingActoImage = data;
+      document.getElementById('af-img-preview').src           = data;
+      document.getElementById('af-img-preview').style.display  = '';
+      document.getElementById('af-img-placeholder').style.display = 'none';
+      document.getElementById('af-img-clear').style.display    = '';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Limpia la imagen seleccionada en el modal de acto.
+function clearActoImage() {
+  _editingActoImage = null;
+  document.getElementById('af-img-preview').src               = '';
+  document.getElementById('af-img-preview').style.display      = 'none';
+  document.getElementById('af-img-placeholder').style.display  = '';
+  document.getElementById('af-img-clear').style.display        = 'none';
+  document.getElementById('af-image').value = '';
+}
+
+// Publica la imagen de un acto en la galería del diario de la sesión.
+// Si ya existía una entrada del mismo acto la reemplaza (sin duplicados).
+function publishActoImage(session, acto, clone) {
+  if (!acto.image) return;
+  if (!session.publishedImages) session.publishedImages = [];
+  session.publishedImages = session.publishedImages.filter(i => i.actoId !== acto.id);
+  session.publishedImages.push({ id: uid(), actoId: acto.id, src: acto.image, caption: acto.title });
+  saveState();
+  renderSessionGallery(session, clone);
+  showToast('Imagen publicada en el diario', 'success');
+}
+
+// Renderiza la galería de imágenes publicadas en el panel del diario.
+// DM puede retirar entradas; todos los usuarios pueden ver y ampliar.
+function renderSessionGallery(session, clone) {
+  const wrap = clone.querySelector('.diary-gallery-wrap');
+  const grid = clone.querySelector('.diary-gallery-grid');
+  if (!wrap || !grid) return;
+  const imgs = session.publishedImages || [];
+  if (!imgs.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  grid.innerHTML = '';
+  imgs.forEach(entry => {
+    const item = document.createElement('div');
+    item.className = 'diary-gallery-item';
+    const imgEl = document.createElement('img');
+    imgEl.src = entry.src; imgEl.alt = entry.caption || '';
+    imgEl.className = 'diary-gallery-img';
+    imgEl.title = entry.caption || '';
+    imgEl.addEventListener('click', () => openGalleryLightbox(entry.src, entry.caption));
+    item.appendChild(imgEl);
+    if (entry.caption) {
+      const cap = document.createElement('div');
+      cap.className = 'diary-gallery-caption';
+      cap.textContent = entry.caption;
+      item.appendChild(cap);
+    }
+    if (isDM()) {
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn btn-danger btn-xs diary-gallery-remove';
+      removeBtn.textContent = '✕'; removeBtn.title = 'Retirar del diario';
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        session.publishedImages = session.publishedImages.filter(i => i.id !== entry.id);
+        saveState();
+        renderSessionGallery(session, clone);
+      });
+      item.appendChild(removeBtn);
+    }
+    grid.appendChild(item);
+  });
+}
+
+// Abre un lightbox de pantalla completa para ver la imagen ampliada.
+function openGalleryLightbox(src, caption) {
+  let overlay = document.getElementById('gallery-lightbox');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'gallery-lightbox';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:pointer;';
+    overlay.addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <img src="${src}" style="max-width:90vw;max-height:80vh;border-radius:6px;object-fit:contain;" alt="${caption || ''}">
+    ${caption ? `<div style="color:#fff;font-family:'Crimson Text',serif;font-size:1.05rem;opacity:.85">${caption}</div>` : ''}
+    <div style="color:#aaa;font-size:.78rem;">Clic para cerrar</div>`;
+  overlay.style.display = 'flex';
 }
 
 // ===========================
@@ -3021,6 +3190,7 @@ _g.renderEstadoList      = renderEstadoList;
 _g.openActoModal         = openActoModal;
 _g.saveActo              = saveActo;
 _g.deleteActo            = deleteActo;
+_g.clearActoImage        = clearActoImage;
 _g.openEventoModal       = openEventoModal;
 _g.saveEvento            = saveEvento;
 _g.deleteEvento          = deleteEvento;
