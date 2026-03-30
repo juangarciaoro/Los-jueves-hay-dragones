@@ -2702,7 +2702,7 @@ function showLoadingOverlay(show) {
     el.id = 'loading-overlay';
     el.style.cssText = 'position:fixed;inset:0;z-index:3000;background:radial-gradient(ellipse at center,#2d1a00,#0d0700);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
     el.innerHTML = `
-      <div id="brand-loading" style="font-family:'UnifrakturMaguntia',cursive;color:#d4a017;font-size:2rem;text-shadow:0 0 20px rgba(180,130,0,.5);">Campana</div>
+      <div id="brand-loading" style="font-family:'Cinzel Decorative',serif;color:#d4a017;font-size:2rem;text-shadow:0 0 20px rgba(180,130,0,.5);">Campana</div>
       <div style="font-family:'Cinzel',serif;color:#c9b07a;font-size:.65rem;letter-spacing:4px;text-transform:uppercase;">Conectando con la taberna…</div>
       <div style="width:48px;height:48px;border:3px solid #2d1a00;border-top-color:#d4a017;border-radius:50%;animation:spin .8s linear infinite;"></div>
       <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
