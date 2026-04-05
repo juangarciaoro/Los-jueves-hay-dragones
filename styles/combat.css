@@ -1,0 +1,167 @@
+/* ===========================
+   COMBAT — Initiative, combatant cards, chips, conditions, HP, tooltip
+   =========================== */
+
+/* ===== INITIATIVE CONTROLS ===== */
+.init-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+.init-round{
+  font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold-light);letter-spacing:2px;
+  margin-left:auto;padding:5px 14px;border:1px solid var(--gold-border);border-radius:var(--radius-sm);
+  background:rgba(166,151,123,0.07);
+}
+.combatant-list{display:flex;flex-direction:column;gap:5px;}
+@media (min-width:901px){
+  .combatant-list.multi-col{flex-direction:row;align-items:flex-start;gap:8px;}
+  .combatant-column{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0;}
+  .combatant-list.multi-col .combatant-card{grid-template-columns:32px minmax(0,1fr) auto auto;grid-template-rows:auto auto auto;}
+  .combatant-list.multi-col .c-init-wrap      {grid-column:1;grid-row:1/3;align-self:center;}
+  .combatant-list.multi-col .c-name           {grid-column:2;grid-row:1;}
+  .combatant-list.multi-col .hp-bar-wrap      {grid-column:2;grid-row:2;}
+  .combatant-list.multi-col .hp-actions       {grid-column:3;grid-row:1/3;align-self:center;flex-direction:column;}
+  .combatant-list.multi-col .dead-btns-corner {grid-column:4;grid-row:1/3;justify-self:end;align-self:center;}
+  .combatant-list.multi-col .conditions-wrap  {grid-column:1/-1;grid-row:3;}
+}
+
+/* ===== COMBATANT CARD ===== */
+.combatant-card{
+  display:grid;grid-template-columns:32px minmax(90px,1fr) minmax(130px,1fr) auto auto;
+  align-items:center;gap:8px;padding:9px 14px;
+  background:var(--bg-card);border:1px solid var(--gold-border);
+  border-radius:var(--radius-sm);transition:all var(--t);position:relative;
+}
+.dead-btns-corner{display:flex;gap:3px;}
+.dead-btns-corner .dead-btn{width:22px;height:22px;font-size:.6rem;padding:0;border:1px solid var(--gold-border);}
+.dead-btns-corner.player-hide{display:none!important;}
+.combatant-card:hover{background:var(--bg-hover);border-color:var(--gold-border-strong);}
+.combatant-card.active-turn{border-color:var(--gold-light);background:rgba(166,151,123,0.08);box-shadow:0 0 0 1px rgba(166,151,123,0.22), inset 3px 0 0 var(--gold-light);}
+.combatant-card.dead{opacity:.3;text-decoration:line-through;}
+.combatant-card.type-pj{background:rgba(38,110,48,0.07);border-color:rgba(58,148,72,0.35);}
+.combatant-card.type-pj:hover{background:rgba(38,110,48,0.14);border-color:rgba(58,148,72,0.55);}
+.combatant-card.type-pj.active-turn{background:rgba(38,110,48,0.15);border-color:rgba(58,148,72,0.75);box-shadow:0 0 0 1px rgba(58,148,72,0.3), inset 3px 0 0 #3ca050;}
+.combatant-card.type-enemy{background:rgba(160,80,20,0.08);border-color:rgba(200,110,30,0.38);}
+.combatant-card.type-enemy:hover{background:rgba(160,80,20,0.15);border-color:rgba(200,110,30,0.58);}
+.combatant-card.type-enemy.active-turn{background:rgba(160,80,20,0.16);border-color:rgba(200,110,30,0.78);box-shadow:0 0 0 1px rgba(200,110,30,0.3), inset 3px 0 0 #c86e1e;}
+.c-init{font-family:'Cinzel',serif;font-size:.95rem;font-weight:700;color:var(--gold-light);text-align:center;}
+.c-name{font-family:'Cinzel',serif;font-size:.88rem;font-weight:600;color:var(--text);}
+.c-type{font-size:.62rem;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);display:block;font-family:'Crimson Text',serif;}
+
+/* HP bar */
+.hp-bar-wrap{display:flex;flex-direction:column;gap:3px;}
+.hp-bar-track{height:5px;background:rgba(166,151,123,0.12);border-radius:3px;overflow:hidden;}
+.hp-bar-fill{height:100%;background:linear-gradient(90deg,#a02020,#cc3030);border-radius:3px;transition:width .3s ease;}
+.hp-bar-fill.ok{background:linear-gradient(90deg,#256a2e,#32903e);}
+.hp-bar-fill.low{background:linear-gradient(90deg,var(--warning),#d88020);}
+.hp-text{font-family:'Cinzel',serif;font-size:.68rem;color:var(--text-muted);font-weight:600;text-align:right;}
+.hp-actions{display:flex;gap:4px;}
+.hp-actions.player-hide{display:none!important;}
+.hp-btn{
+  font-size:.72rem;width:28px;height:28px;border-radius:var(--radius-xs);
+  border:1px solid var(--gold-border);background:rgba(0,0,0,0.3);color:var(--text);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;transition:all var(--t);
+}
+.hp-btn:hover{background:rgba(166,151,123,0.18);border-color:var(--gold-border-strong);}
+.hp-btn.dmg{border-color:rgba(122,26,26,0.45);color:var(--blood-light);}
+.hp-btn.dmg:hover{background:rgba(122,26,26,0.2);}
+.hp-btn.heal{border-color:rgba(38,110,48,0.45);color:#3ca050;}
+.hp-btn.heal:hover{background:rgba(38,110,48,0.2);}
+
+/* Conditions */
+.conditions-wrap{display:flex;flex-wrap:wrap;gap:4px;grid-column:1/-1;grid-row:2;}
+.condition-tag{
+  font-family:'Crimson Text',serif;font-size:.68rem;
+  background:rgba(122,26,26,.15);border:1px solid rgba(176,40,40,0.4);color:var(--blood-light);
+  padding:2px 9px;border-radius:20px;cursor:pointer;transition:all var(--t);
+}
+.condition-tag:hover{background:rgba(122,26,26,0.3);}
+.add-cond-btn{
+  font-size:.68rem;color:var(--text-muted);background:none;
+  border:1px dashed var(--gold-border);padding:2px 9px;border-radius:20px;
+  cursor:pointer;font-family:'Crimson Text',serif;transition:all var(--t);
+}
+.add-cond-btn:hover{border-color:var(--gold-light);color:var(--gold-light);}
+.dead-btn{
+  font-size:.6rem;color:var(--blood-light);background:none;
+  border:1px solid rgba(122,26,26,0.35);padding:3px 7px;cursor:pointer;
+  font-family:'Crimson Text',serif;border-radius:var(--radius-xs);transition:all var(--t);
+}
+.dead-btn:hover{background:rgba(122,26,26,.2);}
+
+/* Add combatant form */
+.add-combatant-form{
+  display:flex;flex-direction:column;gap:10px;padding:14px;
+  background:rgba(0,0,0,0.25);border:1px dashed var(--gold-border);border-radius:var(--radius-sm);margin-top:14px;
+}
+.combatant-chips-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:26px;}
+.combatant-quick-add{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.chip-pj{
+  font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.5px;padding:5px 12px;
+  border-radius:20px;cursor:pointer;transition:all var(--t);
+  background:rgba(38,110,48,0.18);border:1px solid rgba(58,148,72,0.45);color:#3ca050;
+}
+.chip-pj:hover{background:rgba(38,110,48,0.32);}
+.chip-pj.in-session{opacity:.35;cursor:default;pointer-events:none;}
+.chip-enemy{
+  font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.5px;padding:5px 12px;
+  border-radius:20px;cursor:pointer;transition:all var(--t);
+  background:rgba(122,26,26,0.18);border:1px solid rgba(176,40,40,0.45);color:var(--blood-light);
+}
+.chip-enemy:hover{background:rgba(122,26,26,0.32);}
+.chip-enemy-prep{
+  font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.5px;padding:5px 12px;
+  border-radius:20px;cursor:pointer;transition:all var(--t);
+  background:rgba(122,26,26,0.12);border:1px solid rgba(176,40,40,0.35);color:var(--text-muted);
+}
+.chip-enemy-prep:hover{background:rgba(122,26,26,0.28);border-color:rgba(176,40,40,0.65);color:var(--blood-light);}
+.chip-enemy-prep.selected{background:rgba(122,26,26,0.38);border:1px solid rgba(176,40,40,0.85);color:var(--blood-light);box-shadow:0 0 8px rgba(176,40,40,0.3);}
+.combatant-section-label{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:1.5px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px;}
+.c-init-input{
+  width:38px;text-align:center;font-family:'Cinzel',serif;font-size:.9rem;font-weight:700;
+  color:var(--gold-light);background:transparent;border:none;
+  border-bottom:1px solid var(--gold-border);outline:none;padding:0 2px;transition:background var(--t);
+}
+.c-init-input:focus{background:rgba(166,151,123,0.1);}
+
+/* ===== ENEMY STAT TOOLTIP ===== */
+#enemy-stat-tooltip{
+  position:fixed;z-index:800;background:var(--bg-panel);
+  border:1px solid rgba(200,110,30,0.55);border-radius:var(--radius-md);
+  box-shadow:0 12px 48px rgba(0,0,0,0.92), 0 0 0 1px rgba(200,110,30,0.18), var(--shadow-gold);
+  padding:0;min-width:220px;max-width:300px;pointer-events:none;
+  opacity:0;transform:translateY(6px) scale(0.97);
+  transition:opacity .18s ease, transform .18s ease;font-family:'Crimson Text',serif;
+}
+#enemy-stat-tooltip.visible{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+.est-header{
+  display:flex;justify-content:space-between;align-items:center;padding:10px 14px 8px;
+  border-bottom:1px solid rgba(200,110,30,0.28);
+  background:linear-gradient(180deg,rgba(200,110,30,0.12),transparent);border-radius:var(--radius-md) var(--radius-md) 0 0;
+}
+.est-name{font-family:'Cinzel',serif;font-size:.78rem;font-weight:700;color:var(--gold-light);letter-spacing:1px;}
+.est-close{cursor:pointer;color:var(--text-muted);font-size:.85rem;padding:2px 5px;border-radius:var(--radius-xs);transition:color var(--t),background var(--t);}
+.est-close:hover{color:var(--blood-light);background:rgba(122,26,26,0.12);}
+.est-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;padding:10px 14px 8px;border-bottom:1px solid rgba(200,110,30,0.18);}
+.est-stat{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.est-label{font-size:.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);}
+.est-val{font-family:'Cinzel',serif;font-size:.88rem;font-weight:700;color:var(--text);}
+.est-val.est-pv{color:var(--blood-light);}
+.est-section{padding:8px 14px;}
+.est-section + .est-section{border-top:1px solid rgba(200,110,30,0.15);padding-top:7px;}
+.est-section-label{font-size:.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:3px;}
+.est-attacks,.est-notes{font-size:.88rem;color:var(--text);line-height:1.45;white-space:pre-wrap;word-break:break-word;}
+
+/* Info buttons on enemy cards */
+.enemy-info-btn{
+  position:absolute;top:5px;right:5px;width:18px;height:18px;border-radius:50%;
+  border:1px solid rgba(200,110,30,0.45);background:rgba(200,110,30,0.1);
+  color:rgba(200,110,30,0.85);font-size:.65rem;font-weight:700;font-family:'Cinzel',serif;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t);line-height:1;z-index:2;
+}
+.enemy-info-btn:hover{background:rgba(200,110,30,0.25);border-color:rgba(200,110,30,0.8);color:var(--gold-light);}
+.player-enemy-info-btn{
+  position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;
+  border:1px solid rgba(166,151,123,0.5);background:rgba(166,151,123,0.1);
+  color:var(--gold-light);font-size:.75rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all var(--t);line-height:1;z-index:2;
+}
+.player-enemy-info-btn:hover{background:rgba(166,151,123,0.28);border-color:var(--gold-light);transform:scale(1.15);}
+.combatant-card.type-enemy .dead-btns-corner{margin-right:22px;}

@@ -1,0 +1,79 @@
+/* ===========================
+   BASE — Variables, reset, body, scrollbar
+   =========================== */
+
+/* ===== DESIGN TOKENS ===== */
+:root {
+  --bg-base:    #222C40;
+  --bg-panel:   #293548;
+  --bg-card:    #394A59;
+  --bg-input:   rgba(26,34,50,0.70);
+  --bg-hover:   rgba(57,74,89,0.95);
+
+  --text:       #F2DEA0;
+  --text-muted: #D9BD89;
+  --text-dim:   #A6977B;
+
+  --gold:       #A6977B;
+  --gold-light: #D9BD89;
+  --gold-bright:#F2DEA0;
+  --gold-glow:  rgba(217,189,137,0.28);
+  --gold-border:rgba(166,151,123,0.32);
+  --gold-border-strong:rgba(217,189,137,0.62);
+
+  --blood:      #7a1818;
+  --blood-light:#b02828;
+  --green:      #2a6e36;
+  --green-light:#3a9448;
+  --warning:    #c87820;
+
+  --parchment:       var(--bg-card);
+  --parchment-dark:  var(--bg-panel);
+  --parchment-deep:  var(--text-muted);
+  --ink:             var(--text);
+  --ink-faded:       var(--text-muted);
+  --panel-bg:        var(--bg-panel);
+  --border:          var(--gold-border);
+
+  --shadow-sm:  0 2px 10px rgba(0,0,0,0.75);
+  --shadow-md:  0 4px 24px rgba(0,0,0,0.85), 0 1px 0 rgba(166,151,123,0.1);
+  --shadow-lg:  0 8px 48px rgba(0,0,0,0.95);
+  --shadow-gold:0 0 20px rgba(217,189,137,0.18);
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius:    var(--radius-md);
+
+  --t:      0.18s ease;
+  --t-slow: 0.28s ease;
+}
+
+/* ===== RESET ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+
+body{
+  background-color:var(--bg-base);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 20% 0%,   rgba(57,74,89,0.65) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 100%, rgba(41,53,72,0.55)  0%, transparent 55%);
+  font-family:'Crimson Text',serif;
+  font-size:18px;
+  color:var(--text);
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  line-height:1.75;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg-base);}
+::-webkit-scrollbar-thumb{background:rgba(166,151,123,0.32);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(166,151,123,0.55);}
+
+/* Inline checkbox accent */
+input[type=checkbox]{accent-color:var(--gold-light);}

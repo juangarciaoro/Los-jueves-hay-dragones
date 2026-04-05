@@ -54,7 +54,7 @@ let _ignoreNext  = false;
 let _playerPreview = false; // DM preview mode as player
 
 function emptyState() {
-  return { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
+  return { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{}, encounteredEnemies:[] };
 }
 
 // Garantiza que todos los campos del estado tienen valores por defecto.
@@ -69,12 +69,28 @@ function normalizeState(data) {
     estados: data?.estados || [],
     actos: data?.actos || [],
     eventos: data?.eventos || [],
-    playerNotes: data?.playerNotes || {}
+    playerNotes: data?.playerNotes || {},
+    encounteredEnemies: data?.encounteredEnemies || []
   };
 }
 
 function getCurrentStateDoc() {
   return currentCampaignId ? doc(db, 'campaigns', currentCampaignId) : null;
+}
+
+// Devuelve los datos del jugador normalizados (notas, bestiario, inventario).
+// Migra automáticamente el formato antiguo (string) al nuevo (objeto).
+function getPlayerData(userId) {
+  const raw = state.playerNotes[userId];
+  if (!raw || typeof raw === 'string') {
+    return { notes: (typeof raw === 'string' ? raw : ''), bestiary: {}, inventory: Array(10).fill('') };
+  }
+  const inv = Array.isArray(raw.inventory) ? raw.inventory : [];
+  return {
+    notes: raw.notes || '',
+    bestiary: raw.bestiary || {},
+    inventory: [...inv, ...Array(10).fill('')].slice(0, 10)
+  };
 }
 
 function slugifyCampaignName(name) {
@@ -1205,18 +1221,42 @@ function buildSessionView(session) {
   // DM-only sections
   if (!dm) {
     clone.querySelectorAll('.dm-only-ctrl').forEach(el => el.style.display = 'none');
-    // Show player notes panel
+    // Show pause menu panel
     const pnw = clone.querySelector('.player-notes-panel-wrap');
     if (pnw) pnw.style.display = '';
-    // Bind player notes (global per-user, shared across all sessions)
+
+    // Tab switching
+    const tabs = pnw ? pnw.querySelectorAll('.pause-tab') : [];
+    const panels = pnw ? pnw.querySelectorAll('.pause-tab-panel') : [];
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.style.display = 'none');
+        tab.classList.add('active');
+        pnw.querySelector(`[data-panel="${tab.dataset.tab}"]`).style.display = '';
+      });
+    });
+
+    // Notas tab — plain textarea
     const pnArea = clone.querySelector('[data-field="player_note"]');
     if (pnArea && currentUser) {
-      pnArea.value = state.playerNotes[currentUser.id] || '';
+      const pd0 = getPlayerData(currentUser.id);
+      pnArea.value = pd0.notes;
       pnArea.addEventListener('input', () => {
-        state.playerNotes[currentUser.id] = pnArea.value;
+        const pd = getPlayerData(currentUser.id);
+        pd.notes = pnArea.value;
+        state.playerNotes[currentUser.id] = pd;
         saveState();
       });
     }
+
+    // Inventario tab
+    const invGrid = pnw ? pnw.querySelector('.inventory-grid') : null;
+    if (invGrid && currentUser) renderInventoryPanel(invGrid, currentUser.id);
+
+    // Bestiario tab
+    const bestList = pnw ? pnw.querySelector('.bestiary-list') : null;
+    if (bestList && currentUser) renderBestiaryList(bestList, currentUser.id);
   }
 
   // Popup buttons
@@ -1225,10 +1265,10 @@ function buildSessionView(session) {
   const diceBtn     = clone.querySelector('.btn-popup-dice');
   const dicePopup   = clone.querySelector('.popup-dice');
 
-  notesBtn.textContent = dm ? '🗒' : '📝';
-  notesBtn.title       = dm ? 'Notas del DM' : 'Mi Cuaderno';
+  notesBtn.textContent = dm ? '🗒' : '📖';
+  notesBtn.title       = dm ? 'Notas del DM' : 'Cuaderno';
   const notesPopupTitle = clone.querySelector('.popup-notes-title');
-  if (notesPopupTitle) notesPopupTitle.textContent = dm ? '🗒 Notas del DM' : '📝 Mi Cuaderno';
+  if (notesPopupTitle) notesPopupTitle.textContent = dm ? '🗒 Notas del DM' : '📖 Cuaderno del Aventurero';
 
   function openPopup(popup, btn) {
     popup.style.display = 'flex';
@@ -1508,6 +1548,147 @@ function renderRollDisplay(el, entry) {
     el.innerHTML = `<span style="font-size:1.1rem;color:var(--ink-faded)">[${entry.rolls.join(', ')}]</span> <span style="color:var(--ink-faded);font-size:.9rem">=</span> <span class="result-total">${entry.total}</span>`;
   }
 }
+
+// ===========================
+//  PAUSE MENU — BESTIARIO E INVENTARIO
+//  renderBestiaryList(): muestra todas las criaturas del estado; las no
+//    encontradas aparecen como "???". Al clicar una conocida abre el detalle.
+//  openBestiaryDetail(): vista de notas personales sobre un enemigo concreto.
+//  renderInventoryPanel(): 10 slots de texto para el inventario del jugador.
+// ===========================
+function renderBestiaryList(container, userId, filter) {
+  container.innerHTML = '';
+  if (!state.enemies.length) {
+    const empty = document.createElement('div');
+    empty.className = 'bestiary-empty';
+    empty.textContent = 'No hay criaturas registradas.';
+    container.appendChild(empty);
+    return;
+  }
+
+  // Search input
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'bestiary-search-wrap';
+  const searchInput = document.createElement('input');
+  searchInput.className = 'bestiary-search';
+  searchInput.type = 'search';
+  searchInput.placeholder = 'Buscar criatura…';
+  searchInput.value = filter || '';
+  searchWrap.appendChild(searchInput);
+  container.appendChild(searchWrap);
+
+  const listWrap = document.createElement('div');
+  listWrap.className = 'bestiary-entries';
+  container.appendChild(listWrap);
+
+  const q = (filter || '').toLowerCase();
+
+  function renderEntries(query) {
+    listWrap.innerHTML = '';
+    let anyVisible = false;
+    state.enemies.forEach(enemy => {
+      const known = state.encounteredEnemies.includes(enemy.id);
+      const displayName = known ? enemy.name : '???';
+      if (query && known && !enemy.name.toLowerCase().includes(query)) return;
+      if (query && !known) return;
+      anyVisible = true;
+      const row = document.createElement('div');
+      row.className = 'bestiary-row' + (known ? ' known' : ' unknown');
+      const icon = document.createElement('span');
+      icon.className = 'bestiary-icon';
+      icon.textContent = known ? '📖' : '❓';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'bestiary-name';
+      nameEl.textContent = displayName;
+      row.appendChild(icon);
+      row.appendChild(nameEl);
+      if (known) {
+        const pd = getPlayerData(userId);
+        const hasNotes = !!(pd.bestiary[enemy.id]);
+        if (hasNotes) {
+          const badge = document.createElement('span');
+          badge.className = 'bestiary-notes-badge';
+          badge.textContent = '✎';
+          badge.title = 'Tiene notas';
+          row.appendChild(badge);
+        }
+        row.addEventListener('click', () => openBestiaryDetail(container, enemy, userId));
+      }
+      listWrap.appendChild(row);
+    });
+    if (!anyVisible) {
+      const empty = document.createElement('div');
+      empty.className = 'bestiary-empty';
+      empty.textContent = query ? 'Sin resultados.' : 'Ninguna criatura descubierta aún.';
+      listWrap.appendChild(empty);
+    }
+  }
+
+  renderEntries(q);
+  searchInput.addEventListener('input', () => renderEntries(searchInput.value.toLowerCase()));
+}
+
+function openBestiaryDetail(container, enemy, userId) {
+  container.innerHTML = '';
+  const pd = getPlayerData(userId);
+
+  const header = document.createElement('div');
+  header.className = 'bestiary-detail-header';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'btn btn-outline btn-sm';
+  backBtn.textContent = '← Volver';
+  backBtn.addEventListener('click', () => renderBestiaryList(container, userId));
+
+  const title = document.createElement('div');
+  title.className = 'bestiary-detail-title';
+  title.textContent = enemy.name;
+
+  header.appendChild(backBtn);
+  header.appendChild(title);
+
+  const area = document.createElement('textarea');
+  area.className = 'note-area';
+  area.style.minHeight = '180px';
+  area.placeholder = `Tus notas sobre ${enemy.name}…`;
+  area.value = pd.bestiary[enemy.id] || '';
+  area.addEventListener('input', () => {
+    const pd2 = getPlayerData(userId);
+    pd2.bestiary[enemy.id] = area.value;
+    state.playerNotes[userId] = pd2;
+    saveState();
+  });
+
+  container.appendChild(header);
+  container.appendChild(area);
+}
+
+function renderInventoryPanel(container, userId) {
+  container.innerHTML = '';
+  const pd = getPlayerData(userId);
+  for (let i = 0; i < 10; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'inv-slot';
+    const num = document.createElement('span');
+    num.className = 'inv-slot-num';
+    num.textContent = i + 1;
+    const inp = document.createElement('input');
+    inp.className = 'inv-input';
+    inp.type = 'text';
+    inp.placeholder = `Objeto ${i + 1}…`;
+    inp.value = pd.inventory[i] || '';
+    inp.addEventListener('input', () => {
+      const pd2 = getPlayerData(userId);
+      pd2.inventory[i] = inp.value;
+      state.playerNotes[userId] = pd2;
+      saveState();
+    });
+    slot.appendChild(num);
+    slot.appendChild(inp);
+    container.appendChild(slot);
+  }
+}
+
 function renderRollHistory(session, el) {
   el.innerHTML = '';
   const dm = isDM();
@@ -1566,6 +1747,9 @@ function renderCombatantChips(clone, session) {
       const rndInit = Math.ceil(Math.random() * 20);
       session.combatants.push({ id:uid(), name:enemy.name, enemyId:enemy.id, init:rndInit, hp:enemy.pv||10, maxHp:enemy.pv||10, tempHp:0, type:'enemy', dead:false, conditions:[] });
       session.combatants.sort((a,b) => b.init - a.init);
+      if (!state.encounteredEnemies.includes(enemy.id)) {
+        state.encounteredEnemies.push(enemy.id);
+      }
       saveState();
       renderCombatantList(session, clone);
     };
@@ -1631,7 +1815,38 @@ function renderCombatantList(session, clone) {
         <button class="dead-btn">${c.dead?'♻':'☠'}</button>
         <button class="dead-btn" style="border-color:var(--ink-faded);color:var(--ink-faded)">✕</button>
       </div>
-      ${dm && c.type==='enemy' && c.enemyId ? '<button class="enemy-info-btn" title="Ver ficha del enemigo">ⓘ</button>' : ''}`;
+      ${dm && c.type==='enemy' && c.enemyId ? '<button class="enemy-info-btn" title="Ver ficha del enemigo">ⓘ</button>' : ''}
+      ${!dm && c.type==='enemy' && c.enemyId && state.encounteredEnemies.includes(c.enemyId) ? '<button class="player-enemy-info-btn" title="Ver en bestiario">📖</button>' : ''}`;
+
+    // Bestiary info button — player only, known enemy
+    if (!dm && c.type === 'enemy' && c.enemyId && state.encounteredEnemies.includes(c.enemyId)) {
+      const playerInfoBtn = card.querySelector('.player-enemy-info-btn');
+      if (playerInfoBtn) {
+        playerInfoBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          // Open notes popup
+          const notesPopup = clone.querySelector('.popup-notes');
+          const notesBtn   = clone.querySelector('.btn-popup-notes');
+          const dicePopup  = clone.querySelector('.popup-dice');
+          const diceBtn    = clone.querySelector('.btn-popup-dice');
+          if (notesPopup) { notesPopup.style.display = 'flex'; if (notesBtn) notesBtn.classList.add('active'); }
+          if (dicePopup)  { dicePopup.style.display  = 'none'; if (diceBtn)  diceBtn.classList.remove('active'); }
+          // Switch to bestiario tab
+          const pnw = clone.querySelector('.player-notes-panel-wrap');
+          if (!pnw) return;
+          pnw.querySelectorAll('.pause-tab').forEach(t => t.classList.remove('active'));
+          pnw.querySelectorAll('.pause-tab-panel').forEach(p => p.style.display = 'none');
+          const bestiarioTab   = pnw.querySelector('[data-tab="bestiario"]');
+          const bestiarioPanel = pnw.querySelector('[data-panel="bestiario"]');
+          if (bestiarioTab)   bestiarioTab.classList.add('active');
+          if (bestiarioPanel) bestiarioPanel.style.display = '';
+          // Open detail for this enemy
+          const enemy = state.enemies.find(en => en.id === c.enemyId);
+          const bestList = bestiarioPanel ? bestiarioPanel.querySelector('.bestiary-list') : null;
+          if (enemy && bestList && currentUser) openBestiaryDetail(bestList, enemy, currentUser.id);
+        });
+      }
+    }
 
     // Info button hover — DM only, enemy with template
     if (dm && c.type === 'enemy' && c.enemyId) {
@@ -2379,7 +2594,7 @@ function addHab() {
   const list = document.getElementById('cf-habs-list');
   const habId = 'hab-' + uid();
   const row = document.createElement('div'); row.className = 'hab-row';
-  row.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;gap:6px">
+  row.innerHTML = `<div style="width:100%;display:flex;flex-direction:column;gap:6px">
     <input class="form-input" placeholder="Nombre">
     <textarea class="form-input note-area" placeholder="Descripción…" style="min-height:60px"></textarea>
   </div>
@@ -2439,7 +2654,7 @@ function openCharModal(id) {
   charSkillState={}; charWeaponSkillState={}; charHabState={}; currentArmorSel='';
   document.getElementById('modal-char-title').textContent = id ? 'Editar Personaje' : 'Nuevo Personaje';
   const char = id ? state.chars.find(c=>c.id===id) : null;
-  ['name','player','class','race','align','height','age','pv','pm','gold','skillpts','backpack','notes'].forEach(f=>{
+  ['name','player','class','race','align','height','age','pv','pm','gold','skillpts','notes'].forEach(f=>{
     const el=document.getElementById('cf-'+f); if(el) el.value = char?(char[f]||''):'';
   });
   ['fue','int','car','des','vida'].forEach(a=>{
@@ -2453,7 +2668,7 @@ function openCharModal(id) {
     const row=document.createElement('div'); row.className='hab-row'; row.dataset.habId = habId;
     const level = h.level||0;
     charHabState[habId] = level;
-    row.innerHTML=`<div style="flex:1;display:flex;flex-direction:column;gap:6px">
+    row.innerHTML=`<div style="width:100%;display:flex;flex-direction:column;gap:6px">
       <input class="form-input" value="${h.name||''}" placeholder="Nombre">
       <textarea class="form-input note-area" style="min-height:60px" placeholder="Descripción…">${h.desc||''}</textarea>
     </div>
@@ -2498,7 +2713,7 @@ function saveChar() {
     pm:parseInt(document.getElementById('cf-pm').value)||0,
     gold:parseInt(document.getElementById('cf-gold').value)||0, skillpts:parseInt(document.getElementById('cf-skillpts').value)||0,
     armor:currentArmorSel, skills:Object.assign({},charSkillState), weaponSkills:Object.assign({},charWeaponSkillState),
-    habs, backpack:document.getElementById('cf-backpack').value, notes:document.getElementById('cf-notes').value,
+    habs, notes:document.getElementById('cf-notes').value,
   };
   if(editingCharId){const idx=state.chars.findIndex(c=>c.id===editingCharId);state.chars[idx]=char;}
   else state.chars.push(char);
@@ -2580,10 +2795,10 @@ function renderCharSheetView(char) {
       <h2 style="font-family:'Cinzel Decorative',serif;color:var(--gold);font-size:1.1rem">${char.name}</h2>
       <button class="btn btn-gold btn-sm" onclick="openCharModal('${char.id}')">✎ Editar</button>
     </div>
-    <div class="charsheet-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="charsheet-grid">
       <div class="panel">
         <div class="panel-header">Identidad</div>
-        <div class="panel-body" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
+        <div class="panel-body cs-panel-identity" style="font-size:.9rem">
           <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Clase</span><div>${char.class||'—'}</div></div>
           <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Raza</span><div>${char.race||'—'}</div></div>
           <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Alineamiento</span><div>${char.align||'—'}</div></div>
@@ -2598,7 +2813,7 @@ function renderCharSheetView(char) {
           <div class="charsheet-attrs" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
             ${['fue','int','car','des','vida'].map(a => {const v=char[a]||10;return `<div class="attr-box"><label>${a.toUpperCase()}</label><div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--ink)">${v}</div></div>`}).join('')}
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
+          <div class="cs-resources" style="font-size:.9rem">
             <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">PM</span><div style="font-family:'Cinzel',serif;font-size:1rem;color:#4a7a9b">${char.pm||0}</div></div>
             <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Armadura</span><div>${char.armor||'—'}</div></div>
             <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Oro</span><div>${char.gold||0}</div></div>
@@ -2613,8 +2828,7 @@ function renderCharSheetView(char) {
         <div class="panel-header">Armamentísticas</div>
         <div class="panel-body"><div class="skills-grid">${weaponsHtml}</div></div>
       </div>
-      ${habsHtml ? `<div class="panel cs-span2" style="grid-column:span 2"><div class="panel-header">Habilidades Especiales</div><div class="panel-body">${habsHtml}</div></div>` : ''}
-      ${char.backpack ? `<div class="panel"><div class="panel-header">Mochila</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.backpack}</div></div>` : ''}
+      ${habsHtml ? `<div class="panel" style="grid-column:1/-1"><div class="panel-header">Habilidades Especiales</div><div class="panel-body">${habsHtml}</div></div>` : ''}
       ${char.notes ? `<div class="panel"><div class="panel-header">Notas</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.notes}</div></div>` : ''}
     </div>`;
 }
