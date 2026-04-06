@@ -391,6 +391,11 @@ body.spectator-mode #main-content { display:none !important; }
 /* Player layout: no actos/eventos columns */
 .session-grid.player-grid{grid-template-columns:56px 1fr;}
 .session-grid.player-grid #panel-diary{grid-column:1/-1;grid-row:1;display:flex;flex-direction:column;}
+.session-grid.player-grid #panel-diary .note-area{
+  flex:none;
+  min-height:320px;
+  height:320px;
+}
 .session-grid.player-grid .session-tool-btns{grid-row:2;}
 .session-grid.player-grid #panel-init{grid-column:2/-1;grid-row:2;}
 /* Eventos session panel */
@@ -1036,7 +1041,7 @@ select.form-input option{background:#222C40;color:#F2DEA0;}
 .modal-overlay{
   display:none;position:fixed;inset:0;
   background:rgba(20,28,42,0.88);backdrop-filter:blur(6px);
-  z-index:500;align-items:center;justify-content:center;padding:16px;
+  z-index:2500;align-items:center;justify-content:center;padding:16px;
 }
 .modal-overlay.open{display:flex;}
 .modal{

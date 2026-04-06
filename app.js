@@ -8,7 +8,7 @@
 //    campaigns/{id} — estado completo de cada campaña
 // ===========================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot }
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, deleteDoc }
   from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
 // UI icon catalog lives in a dedicated folder of individual SVG files.
 import { UI_ICONS, loadIcons, paintStaticIcons } from "./ui-icons.js";
@@ -59,9 +59,21 @@ let _unsubscribe = null;
 let _usersUnsubscribe = null;
 let _ignoreNext  = false;
 let _playerPreview = false; // DM preview mode as player
+const LOGIN_NEW_CAMPAIGN_VALUE = '__new_campaign__';
+const LOGIN_PENDING_CAMPAIGN_VALUE = '__pending_new_campaign__';
+let pendingLoginCampaignDraft = null;
+let campaignModalMode = 'maintenance';
 
 function emptyState() {
   return { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
+}
+
+function isGenericDMUser(user) {
+  return !!user && (user.username || '').trim().toLowerCase() === 'dm';
+}
+
+function isSelectablePlayerUser(user) {
+  return !!user && !isGenericDMUser(user);
 }
 
 // Garantiza que todos los campos del estado tienen valores por defecto.
@@ -70,7 +82,10 @@ function emptyState() {
 function normalizeState(data) {
   return {
     sessions: data?.sessions || [],
-    chars: data?.chars || [],
+    chars: (data?.chars || []).map(char => ({
+      ...char,
+      userId: char?.userId || null
+    })),
     enemies: data?.enemies || [],
     users: data?.users || [],
     estados: data?.estados || [],
@@ -125,7 +140,7 @@ function enemyEncounteredByUser(userId, enemyId) {
 }
 
 function registerEncounteredEnemy(enemyId) {
-  globalUsers.filter(u => !u.isDM).forEach(user => {
+  globalUsers.filter(isSelectablePlayerUser).forEach(user => {
     const notebook = getPlayerNotebook(user.id);
     if (!notebook.encounteredEnemies.includes(enemyId)) {
       notebook.encounteredEnemies.push(enemyId);
@@ -506,7 +521,45 @@ function formatPublishedDiaryEntry(title, content) {
   return `${heading}\n${body}`.trim();
 }
 
+function getLinkedCharForUser(userId) {
+  if (!userId) return null;
+  return state.chars.find(char => char.userId === userId) || null;
+}
+
+function getLinkedCharIdForUser(userId) {
+  return getLinkedCharForUser(userId)?.id || null;
+}
+
+function setLinkedCharForUser(userId, charId) {
+  state.chars.forEach(char => {
+    if (char.userId === userId) char.userId = null;
+    if (charId && char.id === charId) char.userId = userId;
+  });
+}
+
+function migrateCampaignCharLinksFromLegacyUsers() {
+  let changed = false;
+  globalUsers.forEach(user => {
+    if (!user?.charId) return;
+    const linkedChar = state.chars.find(char => char.id === user.charId);
+    if (linkedChar && linkedChar.userId !== user.id) {
+      state.chars.forEach(char => {
+        if (char.userId === user.id) char.userId = null;
+      });
+      linkedChar.userId = user.id;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
 async function saveCampaignCatalog() {
+  campaigns = campaigns.map(c => ({
+    id: c?.id || uid(),
+    name: (c?.name || 'Campaña').trim(),
+    archived: !!c?.archived,
+    dmUserId: c?.dmUserId || null
+  }));
   await setDoc(CAMPAIGNS_INDEX_DOC, { campaigns }, { merge: true });
 }
 
@@ -529,9 +582,10 @@ function sanitizeUsers(users) {
     const key = u.username.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
+    if (isGenericDMUser(u)) u.username = 'dm';
     out.push(u);
   });
-  if (!out.some(u => u.isDM)) {
+  if (!out.some(isGenericDMUser)) {
     out.push({ id: uid(), username: 'dm', passwordHash: hashPassword('dm1234'), isDM: true, charId: null });
   }
   return out;
@@ -602,6 +656,19 @@ async function migrateLegacyUsersToGlobal() {
   }
 }
 
+async function migrateCampaignDirectorsFromLegacyUsers() {
+  const legacyCampaignDM = globalUsers.find(user => user.isDM && !isGenericDMUser(user));
+  if (!legacyCampaignDM) return;
+  let changed = false;
+  campaigns.forEach(campaign => {
+    if (!campaign.dmUserId) {
+      campaign.dmUserId = legacyCampaignDM.id;
+      changed = true;
+    }
+  });
+  if (changed) await saveCampaignCatalog();
+}
+
 function startUsersRealtimeSync() {
   if (_usersUnsubscribe) _usersUnsubscribe();
   _usersUnsubscribe = onSnapshot(APP_USERS_DOC, snap => {
@@ -613,6 +680,8 @@ function startUsersRealtimeSync() {
     if (currentUser) currentUser = globalUsers.find(u => u.id === currentUser.id) || currentUser;
 
     renderUserList();
+    renderCharList();
+    renderCampaignList();
     renderMaintLanding();
     applyRoleUI();
   }, err => {
@@ -623,7 +692,12 @@ function startUsersRealtimeSync() {
 async function ensureCampaignCatalog() {
   const indexSnap = await getDoc(CAMPAIGNS_INDEX_DOC);
   if (indexSnap.exists() && Array.isArray(indexSnap.data().campaigns) && indexSnap.data().campaigns.length) {
-    campaigns = indexSnap.data().campaigns;
+    campaigns = indexSnap.data().campaigns.map(c => ({
+      id: c?.id || uid(),
+      name: (c?.name || 'Campaña').trim(),
+      archived: !!c?.archived,
+      dmUserId: c?.dmUserId || null
+    }));
     return;
   }
 
@@ -635,7 +709,7 @@ async function ensureCampaignCatalog() {
   const migratedUsers = sanitizeUsers(migrated.users || []);
 
   await setDoc(doc(db, 'campaigns', defaultId), JSON.parse(JSON.stringify(migrated)));
-  campaigns = [{ id: defaultId, name: defaultName, archived: false }];
+  campaigns = [{ id: defaultId, name: defaultName, archived: false, dmUserId: null }];
   await saveCampaignCatalog();
   await ensureGlobalUsers(migratedUsers);
 }
@@ -646,12 +720,17 @@ function renderCampaignSelect() {
   const available = campaigns.filter(c => !c.archived);
   sel.innerHTML = '';
 
-  if (!available.length) {
+  if (!available.length && !pendingLoginCampaignDraft) {
     const o = document.createElement('option');
     o.value = '';
     o.textContent = 'No hay campañas activas';
     sel.appendChild(o);
-    sel.disabled = true;
+    const createOption = document.createElement('option');
+    createOption.value = LOGIN_NEW_CAMPAIGN_VALUE;
+    createOption.textContent = '+ Crear nueva campaña...';
+    sel.appendChild(createOption);
+    sel.disabled = false;
+    sel.value = LOGIN_NEW_CAMPAIGN_VALUE;
     applyCampaignBranding();
     return;
   }
@@ -664,9 +743,24 @@ function renderCampaignSelect() {
     sel.appendChild(o);
   });
 
+  if (pendingLoginCampaignDraft?.name) {
+    const pendingOption = document.createElement('option');
+    pendingOption.value = LOGIN_PENDING_CAMPAIGN_VALUE;
+    pendingOption.textContent = `Nueva campaña: ${pendingLoginCampaignDraft.name}`;
+    sel.appendChild(pendingOption);
+  }
+
+  const createOption = document.createElement('option');
+  createOption.value = LOGIN_NEW_CAMPAIGN_VALUE;
+  createOption.textContent = '+ Crear nueva campaña...';
+  sel.appendChild(createOption);
+
   const savedCampaign = sessionStorage.getItem('ljhd_campaign');
-  if (savedCampaign && available.some(c => c.id === savedCampaign)) sel.value = savedCampaign;
-  else sel.value = available[0].id;
+  if (pendingLoginCampaignDraft?.name) sel.value = LOGIN_PENDING_CAMPAIGN_VALUE;
+  else if (savedCampaign && available.some(c => c.id === savedCampaign)) sel.value = savedCampaign;
+  else if (available[0]) sel.value = available[0].id;
+  else sel.value = LOGIN_NEW_CAMPAIGN_VALUE;
+  sel.dataset.lastRealValue = available[0]?.id || '';
   applyCampaignBranding();
 }
 
@@ -775,6 +869,7 @@ async function loadState(campaignId) {
     } else {
       state = emptyState();
     }
+    if (migrateCampaignCharLinksFromLegacyUsers()) saveState();
   } catch(e) { console.error('Firestore read:', e); }
   const badge = document.getElementById('campaign-badge');
   if (badge) badge.textContent = getCurrentCampaignName();
@@ -795,6 +890,7 @@ function startRealtimeSync() {
     if (_ignoreNext) { _ignoreNext = false; return; }
     if (!snap.exists()) return;
     state = normalizeState(snap.data());
+    if (migrateCampaignCharLinksFromLegacyUsers()) saveState();
     if (currentUser && !globalUsers.find(u => u.id === currentUser.id)) { doLogout(); return; }
     if (currentUser) currentUser = globalUsers.find(u => u.id === currentUser.id) || currentUser;
     rebuildSessionTabs();
@@ -811,8 +907,9 @@ function startRealtimeSync() {
     // Re-render charsheet: if currently visible OR if player (charsheet is their home)
     const activeView = document.querySelector('.view.active');
     const onCharsheet = activeView && activeView.id === 'view-charsheet';
-    if (onCharsheet || (!isDM() && currentUser?.charId)) {
-      const csChar = currentUser?.charId ? state.chars.find(c => c.id === currentUser.charId) : null;
+    const linkedCharId = getLinkedCharIdForUser(currentUser?.id);
+    if (onCharsheet || (!isDM() && linkedCharId)) {
+      const csChar = linkedCharId ? state.chars.find(c => c.id === linkedCharId) : null;
       if (onCharsheet || csChar) renderCharSheetView(csChar);
     }
     // Render active sessions if that view is visible
@@ -843,8 +940,17 @@ function hashPassword(pw) {
 //  getSession — acceso rápido a una sesión por ID
 // ===========================
 function uid() { return Math.random().toString(36).slice(2,10); }
-function isDM() { return currentUser && currentUser.isDM && !_playerPreview; }
-function isRealDM() { return currentUser && currentUser.isDM; }
+function getCampaignMeta(campaignId = currentCampaignId) {
+  return campaigns.find(c => c.id === campaignId) || null;
+}
+function canManageCampaign(campaignId = currentCampaignId, user = currentUser) {
+  if (!user) return false;
+  if (isGenericDMUser(user)) return true;
+  const campaign = getCampaignMeta(campaignId);
+  return !!campaign && campaign.dmUserId === user.id;
+}
+function isDM() { return canManageCampaign(currentCampaignId, currentUser) && !_playerPreview; }
+function isRealDM() { return canManageCampaign(currentCampaignId, currentUser); }
 function getSession(id) { return state.sessions.find(s => s.id === id); }
 
 // ===========================
@@ -859,12 +965,17 @@ function getSession(id) { return state.sessions.find(s => s.id === id); }
 //    a vacío y vuelve a mostrar la pantalla de login.
 // ===========================
 async function doLogin() {
-  const campaignId = document.getElementById('login-campaign')?.value || '';
+  const campaignSelection = document.getElementById('login-campaign')?.value || '';
   const username = document.getElementById('login-user').value.trim();
   const password = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-error');
   const hasActiveCampaigns = campaigns.some(c => !c.archived);
-  if (!campaignId && hasActiveCampaigns) { errEl.textContent = 'Selecciona una campaña.'; return; }
+  const wantsPendingCampaign = campaignSelection === LOGIN_PENDING_CAMPAIGN_VALUE;
+  const wantsNewCampaignWithoutDraft = campaignSelection === LOGIN_NEW_CAMPAIGN_VALUE;
+  const campaignId = wantsPendingCampaign ? '' : campaignSelection;
+  if ((!campaignSelection || wantsNewCampaignWithoutDraft) && hasActiveCampaigns) { errEl.textContent = 'Selecciona una campaña.'; return; }
+  if (wantsNewCampaignWithoutDraft) { errEl.textContent = 'Indica primero el nombre de la nueva campaña.'; return; }
+  if (wantsPendingCampaign && !pendingLoginCampaignDraft?.name) { errEl.textContent = 'Primero indica el nombre de la nueva campaña.'; return; }
   if (!username || !password) { errEl.textContent = 'Introduce usuario y contraseña.'; return; }
 
   if (campaignId && currentCampaignId !== campaignId) {
@@ -874,11 +985,36 @@ async function doLogin() {
   const hash = hashPassword(password);
   const user = globalUsers.find(u => u.username === username && u.passwordHash === hash);
   if (!user) { errEl.textContent = 'Usuario o contraseña incorrectos.'; return; }
+  let resolvedCampaignId = campaignId;
+  if (wantsPendingCampaign) {
+    showLoadingOverlay(true);
+    try {
+      const newCampaignId = getUniqueCampaignId(pendingLoginCampaignDraft.name);
+      await setDoc(doc(db, 'campaigns', newCampaignId), emptyState());
+      campaigns.push({
+        id: newCampaignId,
+        name: pendingLoginCampaignDraft.name,
+        archived: false,
+        dmUserId: user.id
+      });
+      await saveCampaignCatalog();
+      pendingLoginCampaignDraft = null;
+      renderCampaignSelect();
+      resolvedCampaignId = newCampaignId;
+      await loadState(resolvedCampaignId);
+    } catch (error) {
+      console.error('Create campaign during login error:', error);
+      showLoadingOverlay(false);
+      errEl.textContent = 'No se pudo crear la campaña.';
+      return;
+    }
+    showLoadingOverlay(false);
+  }
   currentUser = user;
   errEl.textContent = '';
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('login-pass').value = '';
-  if (campaignId) sessionStorage.setItem('ljhd_campaign', campaignId);
+  if (resolvedCampaignId) sessionStorage.setItem('ljhd_campaign', resolvedCampaignId);
   sessionStorage.setItem('ljhd_user', user.id);
   applyRoleUI();
   rebuildSessionTabs();
@@ -888,8 +1024,8 @@ async function doLogin() {
   renderCampaignList();
 
   // If no campaign selected: DM goes to maintenance to unarchive/create; players see an error
-  if (!campaignId) {
-    if (!user.isDM) {
+  if (!resolvedCampaignId) {
+    if (!isGenericDMUser(user)) {
       currentUser = null;
       document.getElementById('login-screen').classList.remove('hidden');
       errEl.textContent = 'No hay campañas activas. Contacta al Director de Juego.';
@@ -1047,9 +1183,7 @@ function switchView(viewId) {
     renderSessionEditView();
   } else if (viewId === 'charsheet') {
     let csChar = null;
-    if (currentUser && currentUser.charId) {
-      csChar = state.chars.find(c => c.id === currentUser.charId) || null;
-    }
+    if (currentUser) csChar = getLinkedCharForUser(currentUser.id);
     renderCharSheetView(csChar);
   }
   
@@ -2030,7 +2164,8 @@ function renderCombatantList(session, clone) {
           <div class="hp-text">${hpDisplay}</div>
         </div>`
       : `<div class="hp-bar-wrap"><div class="hp-text" style="font-style:italic;opacity:.5">—</div></div>`;
-    const isOwnChar = !dm && c.type === 'pj' && currentUser?.charId && c.charId === currentUser.charId;
+    const currentCharId = getLinkedCharIdForUser(currentUser?.id);
+    const isOwnChar = !dm && c.type === 'pj' && currentCharId && c.charId === currentCharId;
     const canControl = dm || isOwnChar;
     const initHtml = canControl
       ? `<input class="c-init-input" type="number" value="${c.init}" min="1" max="99" title="Editar iniciativa">`
@@ -2798,7 +2933,7 @@ const WEAPON_SKILLS = [
   {key:'sin_armas',label:'Sin Armas (daño /2)'},
 ];
 
-let editingCharId = null, editingEnemyId = null, editingUserId = null;
+let editingCharId = null, editingEnemyId = null, editingUserId = null, editingCampaignId = null;
 let currentArmorSel = '', currentEnemyArmorSel = '';
 let charSkillState = {}, charWeaponSkillState = {}, charHabState = {};
 
@@ -2867,16 +3002,35 @@ function renderSkillsGrid() {
 function setSkill(key,val) { charSkillState[key]=charSkillState[key]===val?0:val; renderSkillsGrid(); }
 function setWeaponSkill(key,val) { charWeaponSkillState[key]=charWeaponSkillState[key]===val?0:val; renderSkillsGrid(); }
 
+// Rellena el selector de jugador global para vincularlo al personaje de esta campaña.
+function populateCharPlayerSelect(char) {
+  const playerSelect = document.getElementById('cf-player');
+  if (!playerSelect) return;
+  const selectedUserId = char?.userId || globalUsers.find(user => user.username === char?.player)?.id || '';
+  playerSelect.innerHTML = '<option value="">— Sin jugador —</option>';
+  globalUsers
+    .filter(isSelectablePlayerUser)
+    .forEach(user => {
+      const option = document.createElement('option');
+      option.value = user.id;
+      option.textContent = user.username;
+      playerSelect.appendChild(option);
+    });
+  playerSelect.value = selectedUserId;
+  playerSelect.disabled = !isDM();
+}
+
 function openCharModal(id) {
   // Players can only edit their own character
-  if (!isDM() && id && currentUser.charId !== id) return;
+  if (!isDM() && id && getLinkedCharIdForUser(currentUser?.id) !== id) return;
   editingCharId = id||null;
   charSkillState={}; charWeaponSkillState={}; charHabState={}; currentArmorSel='';
   document.getElementById('modal-char-title').textContent = id ? 'Editar Personaje' : 'Nuevo Personaje';
   const char = id ? state.chars.find(c=>c.id===id) : null;
-  ['name','player','class','race','align','height','age','pv','pm','gold','skillpts','backpack','notes'].forEach(f=>{
+  ['name','class','race','align','height','age','pv','pm','gold','skillpts','backpack','notes'].forEach(f=>{
     const el=document.getElementById('cf-'+f); if(el) el.value = char?(char[f]||''):'';
   });
+  populateCharPlayerSelect(char);
   ['fue','int','car','des','vida'].forEach(a=>{
     const el=document.getElementById('cf-'+a); if(el){el.value=char?(char[a]||10):10;}
   });
@@ -2918,13 +3072,19 @@ function openCharModal(id) {
 function saveChar() {
   const name = document.getElementById('cf-name').value.trim();
   if(!name){alert('El personaje necesita un nombre.');return;}
+  const existingChar = editingCharId ? state.chars.find(c => c.id === editingCharId) : null;
+  const selectedUserId = isDM()
+    ? (document.getElementById('cf-player').value || null)
+    : (existingChar?.userId || null);
+  const selectedUser = selectedUserId ? globalUsers.find(user => user.id === selectedUserId) : null;
   const habs = Array.from(document.querySelectorAll('#cf-habs-list .hab-row')).map(row=>{
     const habId = row.dataset.habId;
     return {name:row.querySelector('input').value,desc:row.querySelector('textarea').value,level:charHabState[habId]||0};
   });
   const char = {
     id:editingCharId||uid(), name,
-    player:document.getElementById('cf-player').value, class:document.getElementById('cf-class').value,
+    userId: selectedUserId,
+    player:selectedUser?.username || '', class:document.getElementById('cf-class').value,
     race:document.getElementById('cf-race').value, align:document.getElementById('cf-align').value,
     height:document.getElementById('cf-height').value, age:document.getElementById('cf-age').value,
     fue:parseInt(document.getElementById('cf-fue').value)||10, int:parseInt(document.getElementById('cf-int').value)||10,
@@ -2935,6 +3095,14 @@ function saveChar() {
     armor:currentArmorSel, skills:Object.assign({},charSkillState), weaponSkills:Object.assign({},charWeaponSkillState),
     habs, backpack:document.getElementById('cf-backpack').value, notes:document.getElementById('cf-notes').value,
   };
+  if (selectedUserId) {
+    state.chars.forEach(existing => {
+      if (existing.id !== char.id && existing.userId === selectedUserId) {
+        existing.userId = null;
+        existing.player = '';
+      }
+    });
+  }
   if(editingCharId){const idx=state.chars.findIndex(c=>c.id===editingCharId);state.chars[idx]=char;}
   else state.chars.push(char);
   saveState();
@@ -2942,7 +3110,7 @@ function saveChar() {
   renderCharList();
   showToast('Personaje guardado', 'success');
   // If player updated their own char, refresh charsheet view
-  if(!isDM()) { const myChar=state.chars.find(c=>c.id===currentUser.charId); if(myChar) renderCharSheetView(myChar); }
+  if(!isDM()) { const myChar = getLinkedCharForUser(currentUser?.id); if(myChar) renderCharSheetView(myChar); }
 }
 
 function renderCharList() {
@@ -2954,11 +3122,12 @@ function renderCharList() {
   }
   list.style.display='';
   state.chars.forEach(c=>{
+    const linkedUser = c.userId ? globalUsers.find(u => u.id === c.userId) : null;
     const card=document.createElement('div'); card.className='entity-card';
     card.innerHTML=`
       <div class="entity-card-info">
         <span class="entity-name">${c.name}</span>
-        <span class="entity-meta">${c.class||''} · ${c.race||''} · Jugador: ${c.player||'—'}</span>
+        <span class="entity-meta">${c.class||''} · ${c.race||''} · Jugador: ${linkedUser?.username || c.player || '—'}</span>
         <span class="entity-meta">PV ${c.vida} | PM ${c.pm} | FUE ${c.fue} INT ${c.int} CAR ${c.car} DES ${c.des}</span>
       </div>
       <div class="entity-actions">
@@ -2982,7 +3151,7 @@ function renderCharSheetView(char) {
   if (!view) return;
   if (!char) {
     // Diagnostic: if user has a charId but char wasn't found, show helpful message
-    const hasId = currentUser && currentUser.charId;
+    const hasId = !!getLinkedCharIdForUser(currentUser?.id);
     const charsLoaded = state.chars.length;
     view.innerHTML = hasId && charsLoaded === 0
       ? `<div style="font-family:'Cinzel',serif;color:var(--ink-faded);padding:30px;text-align:center;font-size:.85rem;letter-spacing:2px;line-height:2">
@@ -2994,6 +3163,7 @@ function renderCharSheetView(char) {
   const skillNames = {nadar:'Nadar/Bucear',cerraduras:'Abrir Cerraduras',idiomas:'Idiomas',sigilo:'Sigilo',medicina:'Medicina',brutalidad:'Brutalidad',observacion:'Observación',intimidar:'Intimidar',enganar:'Engañar',persuasion:'Persuasión',acrobacias:'Acrobacias',montar:'Montar',agarrar:'Agarrar',reflejos:'Reflejos'};
   const weaponNames = {espadas:'Espadas',dagas:'Dagas',arcos:'Arcos',mandobles:'Mandobles',hachas:'Hachas',contundentes:'Contundentes',arrojadizas:'Arrojadizas',sin_armas:'Sin armas'};
   const costLabel = v => v===15?'●●●':v===5?'●●○':v===1?'●○○':'○○○';
+  const linkedUser = char.userId ? globalUsers.find(u => u.id === char.userId) : null;
 
   const skillsHtml = Object.entries(skillNames).map(([k,l]) => {
     const v = char.skills?.[k]||0;
@@ -3022,7 +3192,7 @@ function renderCharSheetView(char) {
           <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Clase</span><div>${char.class||'—'}</div></div>
           <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Raza</span><div>${char.race||'—'}</div></div>
           <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Alineamiento</span><div>${char.align||'—'}</div></div>
-          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Jugador</span><div>${char.player||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Jugador</span><div>${linkedUser?.username || char.player || '—'}</div></div>
           <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Altura</span><div>${char.height||'—'}</div></div>
           <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Edad</span><div>${char.age||'—'}</div></div>
         </div>
@@ -3056,9 +3226,6 @@ function renderCharSheetView(char) {
 
 function deleteChar(id) {
   showConfirm('¿Eliminar este personaje?', () => {
-  // Disassociate any user linked to it
-  globalUsers.forEach(u=>{ if(u.charId===id) u.charId=null; });
-  saveGlobalUsers();
   state.chars = state.chars.filter(c=>c.id!==id);
   saveState(); renderCharList(); renderUserList();
   showToast('Personaje eliminado', 'info');
@@ -3149,19 +3316,20 @@ function openUserModal(id) {
   document.getElementById('modal-user-title').textContent = id?'Editar Usuario':'Nuevo Usuario';
   document.getElementById('modal-user-error').textContent='';
   const u = id ? globalUsers.find(x=>x.id===id) : null;
-  document.getElementById('uf-username').value = u?u.username:'';
+  const isGenericDM = isGenericDMUser(u);
+  const usernameInput = document.getElementById('uf-username');
+  usernameInput.value = u?u.username:'';
+  usernameInput.disabled = isGenericDM;
   document.getElementById('uf-password').value = '';
-  document.getElementById('uf-isdm').checked = u?u.isDM:false;
   // Populate char select
   const charSel = document.getElementById('uf-char');
   charSel.innerHTML = '<option value="">— Sin personaje —</option>';
-  state.chars.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; charSel.appendChild(o); });
-  charSel.value = u?u.charId||'':'';
-  // Toggle char select visibility based on isDM checkbox
-  const isDMcb = document.getElementById('uf-isdm');
+  state.chars
+    .filter(c => !c.userId || c.userId === u?.id)
+    .forEach(c => { const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; charSel.appendChild(o); });
+  charSel.value = u ? (getLinkedCharIdForUser(u.id) || '') : '';
   const charWrap = document.getElementById('uf-char-wrap');
-  charWrap.style.display = isDMcb.checked ? 'none' : '';
-  isDMcb.onchange = () => { charWrap.style.display = isDMcb.checked ? 'none' : ''; };
+  charWrap.style.display = isGenericDM ? 'none' : '';
   openModal('modal-user');
 }
 function saveUser() {
@@ -3174,35 +3342,44 @@ function saveUser() {
   const existing = globalUsers.find(u=>u.username===username && u.id!==editingUserId);
   if (existing) { errEl.textContent='Ese nombre de usuario ya existe.'; return; }
   if (isNewUser && !password) { errEl.textContent='La contraseña es obligatoria para nuevos usuarios.'; return; }
-  const isDMchecked = document.getElementById('uf-isdm').checked;
-  const charId = isDMchecked ? null : (document.getElementById('uf-char').value || null);
+  const currentEditingUser = editingUserId ? globalUsers.find(x=>x.id===editingUserId) : null;
+  const genericDMAccount = isGenericDMUser(currentEditingUser);
+  const safeUsername = genericDMAccount ? 'dm' : username;
+  const charId = genericDMAccount ? null : (document.getElementById('uf-char').value || null);
   if (editingUserId) {
     const u = globalUsers.find(x=>x.id===editingUserId);
-    u.username = username;
+    u.username = safeUsername;
     if (password) u.passwordHash = hashPassword(password);
-    u.isDM = isDMchecked;
-    u.charId = charId;
+    setLinkedCharForUser(editingUserId, charId);
     // Update currentUser if editing self
     if (currentUser && currentUser.id === editingUserId) { Object.assign(currentUser, u); applyRoleUI(); }
   } else {
-    globalUsers.push({ id:uid(), username, passwordHash:hashPassword(password), isDM:isDMchecked, charId });
+    const newUserId = uid();
+    globalUsers.push({ id:newUserId, username: safeUsername, passwordHash:hashPassword(password), isDM:false, charId:null });
+    setLinkedCharForUser(newUserId, charId);
   }
-  saveGlobalUsers(); closeModal('modal-user'); renderUserList(); renderMaintLanding();
+  saveGlobalUsers();
+  saveState();
+  closeModal('modal-user'); renderUserList(); renderCharList(); renderMaintLanding();
   showToast('Usuario guardado', 'success');
 }
 function renderUserList() {
   const list = document.getElementById('user-list'); list.innerHTML='';
   globalUsers.forEach(u=>{
-    const linkedChar = u.charId ? state.chars.find(c=>c.id===u.charId) : null;
+    const linkedChar = getLinkedCharForUser(u.id);
+    const currentCampaign = getCampaignMeta();
+    const roleLabel = isGenericDMUser(u)
+      ? `${UI_ICONS.sword} DM global`
+      : (currentCampaign?.dmUserId === u.id ? `${UI_ICONS.sword} DM de esta campaña` : 'Jugador');
     const card=document.createElement('div'); card.className='entity-card';
     card.innerHTML=`
       <div class="entity-card-info">
         <span class="entity-name">${u.username}</span>
-        <span class="entity-meta">${u.isDM?`${UI_ICONS.sword} Director de Juego`:'Jugador'}${linkedChar?' · '+linkedChar.name:''}</span>
+        <span class="entity-meta">${roleLabel}${linkedChar?' · '+linkedChar.name:''}</span>
       </div>
       <div class="entity-actions">
         <button class="btn btn-outline btn-sm" onclick="openUserModal('${u.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>
+        ${isGenericDMUser(u) ? '' : `<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>`}
       </div>`;
     list.appendChild(card);
   });
@@ -3211,10 +3388,15 @@ function deleteUser(id) {
   const u = globalUsers.find(x=>x.id===id);
   if (!u) return;
   if (u.id === currentUser?.id) { showToast('No puedes eliminar tu propia cuenta.', 'error'); return; }
-  if (u.isDM && globalUsers.filter(x=>x.isDM).length <= 1) { showToast('Debe existir al menos un Director de Juego.', 'error'); return; }
+  if (isGenericDMUser(u)) { showToast('La cuenta "dm" no se puede eliminar.', 'error'); return; }
   showConfirm(`¿Eliminar usuario "${u.username}"?`, () => {
+  setLinkedCharForUser(id, null);
+  campaigns.forEach(campaign => {
+    if (campaign.dmUserId === id) campaign.dmUserId = null;
+  });
   globalUsers = globalUsers.filter(x=>x.id!==id);
-  saveGlobalUsers(); renderUserList(); renderMaintLanding();
+  saveGlobalUsers(); saveState(); renderUserList(); renderCharList(); renderMaintLanding();
+  saveCampaignCatalog();
   showToast('Usuario eliminado', 'info');
   }, 'Eliminar usuario');
 }
@@ -3237,56 +3419,125 @@ function renderCampaignList() {
     card.className = 'entity-card';
     const isCurrent = c.id === currentCampaignId;
     const status = c.archived ? 'Archivada' : 'Activa';
+    const dmUser = globalUsers.find(user => user.id === c.dmUserId);
+    const dmLabel = dmUser ? dmUser.username : 'Solo cuenta global "dm"';
+    const canManage = canManageCampaign(c.id);
 
     // DM can open any campaign (active or archived); non-DM only sees active ones
-    const canOpen = isDM() || !c.archived;
+    const canOpen = canManage || !c.archived;
     const switchBtn = canOpen
       ? `<button class="btn btn-outline btn-sm" onclick="switchToCampaign('${c.id}')">${isCurrent ? 'Actual' : 'Abrir'}</button>`
       : '';
-    const archiveBtn = `<button class="btn btn-outline btn-sm" onclick="toggleCampaignArchived('${c.id}')">${c.archived ? 'Reactivar' : 'Archivar'}</button>`;
+    const editBtn = canManage ? `<button class="btn btn-outline btn-sm" onclick="openCampaignModal('${c.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>` : '';
+    const archiveBtn = canManage ? `<button class="btn btn-outline btn-sm" onclick="toggleCampaignArchived('${c.id}')">${c.archived ? 'Reactivar' : 'Archivar'}</button>` : '';
+    const deleteBtn = canManage && c.archived
+      ? `<button class="btn btn-danger btn-sm" onclick="deleteCampaign('${c.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>`
+      : '';
 
     card.innerHTML = `
       <div class="entity-card-info">
         <span class="entity-name">${c.name}${isCurrent ? ' · Actual' : ''}${c.archived ? ' <span style="font-size:.6rem;color:var(--text-muted);letter-spacing:1px">[ARCHIVADA]</span>' : ''}</span>
-        <span class="entity-meta">ID: ${c.id} · ${status}</span>
+        <span class="entity-meta">ID: ${c.id} · ${status} · DM: ${dmLabel}</span>
       </div>
       <div class="entity-actions">
         ${isCurrent ? '' : switchBtn}
+        ${editBtn}
         ${archiveBtn}
+        ${deleteBtn}
       </div>`;
     list.appendChild(card);
   });
 }
 
-function openCampaignModal() {
-  document.getElementById('camp-name').value = '';
+function populateCampaignDmSelect(selectedUserId = '') {
+  const select = document.getElementById('camp-dm-user');
+  if (!select) return;
+  select.innerHTML = '<option value="">— Solo cuenta global "dm" —</option>';
+  globalUsers
+    .filter(isSelectablePlayerUser)
+    .forEach(user => {
+      const option = document.createElement('option');
+      option.value = user.id;
+      option.textContent = user.username;
+      select.appendChild(option);
+    });
+  select.value = selectedUserId || '';
+}
+
+function openCampaignModal(campaignId = null, options = {}) {
+  const mode = options.mode || 'maintenance';
+  campaignModalMode = mode;
+  if (mode === 'maintenance' && !campaignId && !isGenericDMUser(currentUser)) return;
+  if (campaignId && !canManageCampaign(campaignId)) return;
+  editingCampaignId = campaignId || null;
+  const campaign = editingCampaignId ? campaigns.find(c => c.id === editingCampaignId) : null;
+  const creatingFromLogin = mode === 'login-draft';
+  document.getElementById('modal-campaign-title').textContent = creatingFromLogin
+    ? 'Nueva Campaña'
+    : (campaign ? 'Editar Campaña' : 'Nueva Campaña');
+  document.getElementById('modal-campaign-submit').textContent = creatingFromLogin
+    ? 'Preparar'
+    : (campaign ? 'Guardar' : 'Crear');
+  document.getElementById('camp-name').value = creatingFromLogin
+    ? (pendingLoginCampaignDraft?.name || '')
+    : (campaign?.name || '');
   document.getElementById('camp-clone-current').checked = false;
+  document.getElementById('camp-clone-current').disabled = !!campaign || creatingFromLogin;
+  document.getElementById('camp-dm-user-wrap').style.display = creatingFromLogin ? 'none' : '';
+  document.getElementById('camp-clone-current-wrap').style.display = creatingFromLogin ? 'none' : 'flex';
+  populateCampaignDmSelect(campaign?.dmUserId || '');
   document.getElementById('modal-campaign-error').textContent = '';
   openModal('modal-campaign');
 }
 
 async function saveCampaign() {
+  if (campaignModalMode === 'login-draft') {
+    const name = document.getElementById('camp-name').value.trim();
+    const err = document.getElementById('modal-campaign-error');
+    if (!name) { err.textContent = 'El nombre es obligatorio.'; return; }
+    pendingLoginCampaignDraft = { name };
+    closeModal('modal-campaign');
+    renderCampaignSelect();
+    document.getElementById('login-error').textContent = '';
+    return;
+  }
+  if (!editingCampaignId && !isGenericDMUser(currentUser)) return;
+  if (editingCampaignId && !canManageCampaign(editingCampaignId)) return;
   const name = document.getElementById('camp-name').value.trim();
   const cloneCurrent = document.getElementById('camp-clone-current').checked;
+  const dmUserId = document.getElementById('camp-dm-user').value || null;
   const err = document.getElementById('modal-campaign-error');
   if (!name) { err.textContent = 'El nombre es obligatorio.'; return; }
 
-  const id = getUniqueCampaignId(name);
-  const nextState = cloneCurrent ? JSON.parse(JSON.stringify(state)) : emptyState();
-  nextState.users = [];
-
-  await setDoc(doc(db, 'campaigns', id), nextState);
-  campaigns.push({ id, name, archived: false });
+  if (editingCampaignId) {
+    const campaign = campaigns.find(c => c.id === editingCampaignId);
+    if (!campaign) return;
+    campaign.name = name;
+    campaign.dmUserId = dmUserId;
+  } else {
+    const id = getUniqueCampaignId(name);
+    const nextState = cloneCurrent ? JSON.parse(JSON.stringify(state)) : emptyState();
+    nextState.users = [];
+    await setDoc(doc(db, 'campaigns', id), nextState);
+    campaigns.push({ id, name, archived: false, dmUserId });
+  }
   await saveCampaignCatalog();
 
   renderCampaignSelect();
   renderCampaignList();
+  renderUserList();
   renderMaintLanding();
+  const badge = document.getElementById('campaign-badge');
+  if (badge) badge.textContent = getCurrentCampaignName();
+  applyCampaignBranding();
+  applyRoleUI();
   closeModal('modal-campaign');
-  showToast('Campaña creada', 'success');
+  showToast(editingCampaignId ? 'Campaña actualizada' : 'Campaña creada', 'success');
+  editingCampaignId = null;
 }
 
 async function toggleCampaignArchived(campaignId) {
+  if (!canManageCampaign(campaignId)) return;
   const c = campaigns.find(x => x.id === campaignId);
   if (!c) return;
   const wasArchived = c.archived;
@@ -3298,8 +3549,41 @@ async function toggleCampaignArchived(campaignId) {
   showToast(wasArchived ? `"${c.name}" reactivada` : `"${c.name}" archivada`, 'info');
 }
 
+function deleteCampaign(campaignId) {
+  const campaign = campaigns.find(c => c.id === campaignId);
+  if (!campaign || !campaign.archived || !canManageCampaign(campaignId)) return;
+  showConfirm(`¿Borrar definitivamente la campaña "${campaign.name}"? Esta acción no se puede deshacer.`, async () => {
+    if (_unsubscribe && currentCampaignId === campaignId) {
+      _unsubscribe();
+      _unsubscribe = null;
+    }
+    await deleteDoc(doc(db, 'campaigns', campaignId));
+    campaigns = campaigns.filter(c => c.id !== campaignId);
+    await saveCampaignCatalog();
+
+    renderCampaignSelect();
+    renderCampaignList();
+    renderMaintLanding();
+
+    if (currentCampaignId === campaignId) {
+      await doLogout();
+    } else {
+      const nextCampaignId = document.getElementById('login-campaign')?.value || '';
+      if (nextCampaignId && ![LOGIN_NEW_CAMPAIGN_VALUE, LOGIN_PENDING_CAMPAIGN_VALUE].includes(nextCampaignId)) {
+        sessionStorage.setItem('ljhd_campaign', nextCampaignId);
+      } else {
+        sessionStorage.removeItem('ljhd_campaign');
+      }
+    }
+
+    showToast('Campaña eliminada', 'info');
+  }, 'Borrar campaña');
+}
+
 async function switchToCampaign(campaignId) {
-  if (!campaigns.some(c => c.id === campaignId)) return;
+  const campaign = campaigns.find(c => c.id === campaignId);
+  if (!campaign) return;
+  if (campaign.archived && !canManageCampaign(campaignId)) return;
   if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
   sessionStorage.setItem('ljhd_campaign', campaignId);
   sessionStorage.removeItem('ljhd_user');
@@ -3494,6 +3778,7 @@ paintStaticIcons();
   await ensureCampaignCatalog();
   await ensureGlobalUsers();
   await migrateLegacyUsersToGlobal();
+  await migrateCampaignDirectorsFromLegacyUsers();
   renderCampaignSelect();
   applyDeskSubtitle();
 
@@ -3502,11 +3787,23 @@ paintStaticIcons();
     campaignSelect.addEventListener('change', async () => {
       const selected = campaignSelect.value;
       if (!selected) return;
+      if (selected === LOGIN_NEW_CAMPAIGN_VALUE) {
+        campaignSelect.value = pendingLoginCampaignDraft?.name ? LOGIN_PENDING_CAMPAIGN_VALUE : (campaignSelect.dataset.lastRealValue || '');
+        openCampaignModal(null, { mode: 'login-draft' });
+        return;
+      }
+      if (selected === LOGIN_PENDING_CAMPAIGN_VALUE) {
+        document.getElementById('login-error').textContent = '';
+        return;
+      }
+      campaignSelect.dataset.lastRealValue = selected;
       sessionStorage.setItem('ljhd_campaign', selected);
       await loadState(selected);
       document.getElementById('login-error').textContent = '';
     });
-    if (campaignSelect.value) await loadState(campaignSelect.value);
+    if (campaignSelect.value && ![LOGIN_NEW_CAMPAIGN_VALUE, LOGIN_PENDING_CAMPAIGN_VALUE].includes(campaignSelect.value)) {
+      await loadState(campaignSelect.value);
+    }
   }
 
   // Restore session after page refresh
@@ -3645,6 +3942,7 @@ _g.moveActo                  = moveActo;
 _g.openCampaignModal         = openCampaignModal;
 _g.saveCampaign              = saveCampaign;
 _g.toggleCampaignArchived    = toggleCampaignArchived;
+_g.deleteCampaign            = deleteCampaign;
 _g.switchToCampaign          = switchToCampaign;
 _g.showToast                 = showToast;
 _g.showConfirm               = showConfirm;

@@ -432,9 +432,9 @@
   </div>
 </div>
 
-<!-- MODAL: Gestión de usuarios — crea o edita un usuario DM o jugador.
-     Incluye asignación de personaje (solo si no es DM).
-     La contraseña se guarda como hash ligero; no es criptográfica. -->
+<!-- MODAL: Gestión de usuarios globales.
+     El rol de DM ya no vive aquí: se asigna por campaña desde el mantenimiento
+     de campañas. La cuenta "dm" sigue siendo el director global. -->
 <div id="modal-user" class="modal-overlay">
   <div class="modal" style="max-width:420px">
     <div class="modal-header"><span id="modal-user-title">Nuevo Usuario</span><button class="modal-close" onclick="closeModal('modal-user')"><span data-ui-icon="close"></span></button></div>
@@ -446,10 +446,6 @@
       <div>
         <label class="flabel">Contraseña</label>
         <input id="uf-password" class="input-lg" type="password" placeholder="Contraseña">
-      </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <input type="checkbox" id="uf-isdm" style="width:16px;height:16px;accent-color:var(--gold)">
-        <label for="uf-isdm" style="font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:1px;color:var(--ink);cursor:pointer">Este usuario es el Director de Juego</label>
       </div>
       <div id="uf-char-wrap">
         <label class="flabel">Personaje asociado</label>
@@ -476,7 +472,8 @@
       <div class="section-title">Identidad</div>
       <div class="char-form-grid">
         <div class="form-group span2"><label class="flabel">Nombre</label><input class="form-input" id="cf-name" placeholder="Nombre del personaje"></div>
-        <div class="form-group"><label class="flabel">Jugador</label><input class="form-input" id="cf-player" placeholder="Nombre del jugador"></div>
+        <!-- Selector de jugador global para vincular este personaje dentro de la campaña actual. -->
+        <div class="form-group"><label class="flabel">Jugador</label><select class="form-input" id="cf-player"></select></div>
         <div class="form-group"><label class="flabel">Clase</label><input class="form-input" id="cf-class" placeholder="Clase"></div>
         <div class="form-group"><label class="flabel">Raza</label><input class="form-input" id="cf-race" placeholder="Raza"></div>
         <div class="form-group"><label class="flabel">Alineamiento</label><input class="form-input" id="cf-align" placeholder="Alineamiento"></div>
@@ -702,18 +699,24 @@
   </div>
 </div>
 
-<!-- MODAL: Nueva campaña — crea un documento nuevo en Firestore con ID único
-     derivado del nombre (slugificado). Opcionalmente clona el estado
-     actual de la campaña abierta (sin usuarios). -->
+<!-- MODAL: Campaña — crea o edita una campaña y su DM específico.
+     El director elegido solo tiene permisos de DM dentro de esta campaña;
+     la cuenta global "dm" mantiene acceso total a todas. -->
 <div id="modal-campaign" class="modal-overlay">
   <div class="modal" style="max-width:480px">
-    <div class="modal-header"><span>Nueva Campaña</span><button class="modal-close" onclick="closeModal('modal-campaign')"><span data-ui-icon="close"></span></button></div>
+    <div class="modal-header"><span id="modal-campaign-title">Nueva Campaña</span><button class="modal-close" onclick="closeModal('modal-campaign')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
       <div>
         <label class="flabel">Nombre de campaña</label>
         <input id="camp-name" class="input-lg" placeholder="Ej: Los defensores del jueves">
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
+      <div id="camp-dm-user-wrap">
+        <label class="flabel">Director de juego</label>
+        <select id="camp-dm-user" class="form-input" style="width:100%">
+          <option value="">— Solo cuenta global "dm" —</option>
+        </select>
+      </div>
+      <div id="camp-clone-current-wrap" style="display:flex;align-items:center;gap:10px">
         <input type="checkbox" id="camp-clone-current" style="width:16px;height:16px;accent-color:var(--gold)">
         <label for="camp-clone-current" style="font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:1px;color:var(--ink);cursor:pointer">Clonar datos de la campaña actual</label>
       </div>
@@ -721,7 +724,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-campaign')">Cancelar</button>
-      <button class="btn btn-gold btn-sm" onclick="saveCampaign()">Crear</button>
+      <button class="btn btn-gold btn-sm" id="modal-campaign-submit" onclick="saveCampaign()">Crear</button>
     </div>
   </div>
 </div>
