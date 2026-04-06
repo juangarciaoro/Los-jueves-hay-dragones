@@ -6,7 +6,7 @@
 <title>Mesa de Juego</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -319,20 +319,7 @@
         </div>
         <!-- Notas jugador (oculto para DM) -->
         <div class="player-notes-panel-wrap" style="display:none">
-          <div class="pause-menu-tabs">
-            <button class="pause-tab active" data-tab="bestiario">📖 Bestiario</button>
-            <button class="pause-tab" data-tab="inventario">🎒 Inventario</button>
-            <button class="pause-tab" data-tab="notas">📝 Notas</button>
-          </div>
-          <div class="pause-tab-panel" data-panel="bestiario">
-            <div class="bestiary-list"></div>
-          </div>
-          <div class="pause-tab-panel" data-panel="inventario" style="display:none">
-            <div class="inventory-grid"></div>
-          </div>
-          <div class="pause-tab-panel" data-panel="notas" style="display:none">
-            <textarea class="note-area" style="min-height:220px" placeholder="Tus notas personales… solo tú las ves." data-field="player_note"></textarea>
-          </div>
+          <textarea class="note-area" style="min-height:220px" placeholder="Tus notas personales… solo tú las ves." data-field="player_note"></textarea>
         </div>
       </div>
     </div>
@@ -467,6 +454,8 @@
       <div class="section-title">Habilidades Especiales</div>
       <div id="cf-habs-list" class="habs-list"></div>
       <button class="btn btn-outline btn-sm" onclick="addHab()">+ Añadir habilidad especial</button>
+      <div class="section-title">Mochila</div>
+      <textarea class="note-area" id="cf-backpack" style="min-height:70px" placeholder="Objetos…"></textarea>
       <div class="section-title">Notas</div>
       <textarea class="note-area" id="cf-notes" style="min-height:60px" placeholder="Notas adicionales…"></textarea>
     </div>
@@ -741,5 +730,5 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js"></script>
+<script type="module" src="app.js"></script>
 </html>
