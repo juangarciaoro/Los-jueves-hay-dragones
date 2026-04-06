@@ -61,7 +61,8 @@
 </header>
 
 <div id="breadcrumbs">
-  <a href="#" onclick="switchView('landing'); return false">🏠 Inicio</a>
+  <!-- Icono de inicio: se inyecta desde ui-icons.js -->
+  <a href="#" onclick="switchView('landing'); return false"><span data-ui-icon="home"></span> Inicio</a>
   <span id="breadcrumb-separator">/</span>
   <span id="breadcrumb-current">—</span>
 </div>
@@ -84,7 +85,7 @@
     <div style="max-width:800px;margin:0 auto">
       <div class="section-title">Sesiones Activas</div>
       <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openNewSessionModal()" title="Nueva sesión">➕ Nueva Sesión</button>
+        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openNewSessionModal()" title="Nueva sesión"><span data-ui-icon="plus"></span> Nueva Sesión</button>
       </div>
       <div id="active-sessions-list" class="entity-list"></div>
     </div>
@@ -109,7 +110,7 @@
     <div id="maint-personajes" class="maint-section active">
       <div class="maint-section-header">
         <div class="section-title">Personajes</div>
-        <button class="btn btn-gold btn-sm dm-only-ctrl" id="btn-add-char" onclick="openCharModal()">➕ Añadir Personaje</button>
+        <button class="btn btn-gold btn-sm dm-only-ctrl" id="btn-add-char" onclick="openCharModal()"><span data-ui-icon="plus"></span> Añadir Personaje</button>
       </div>
       <input class="search-input" type="search" placeholder="Buscar personaje…" oninput="filterList(this.value,'pj-list')">
       <div id="pj-list" class="entity-list"></div>
@@ -122,7 +123,7 @@
     <div id="maint-enemigos" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Enemigos</div>
-        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openEnemyModal()">➕ Añadir Tipo de Enemigo</button>
+        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openEnemyModal()"><span data-ui-icon="plus"></span> Añadir Tipo de Enemigo</button>
       </div>
       <input class="search-input" type="search" placeholder="Buscar enemigo…" oninput="filterList(this.value,'enemy-list')">
       <div id="enemy-list" class="entity-list"></div>
@@ -130,14 +131,14 @@
     <div id="maint-usuarios" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Usuarios</div>
-        <button class="btn btn-gold btn-sm" onclick="openUserModal()">➕ Añadir Usuario</button>
+        <button class="btn btn-gold btn-sm" onclick="openUserModal()"><span data-ui-icon="plus"></span> Añadir Usuario</button>
       </div>
       <div id="user-list" class="entity-list"></div>
     </div>
     <div id="maint-sesiones" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Sesiones</div>
-        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openNewSessionModal()" title="Nueva sesión">➕ Nueva Sesión</button>
+        <button class="btn btn-gold btn-sm dm-only-ctrl" onclick="openNewSessionModal()" title="Nueva sesión"><span data-ui-icon="plus"></span> Nueva Sesión</button>
       </div>
       <input class="search-input" type="search" placeholder="Buscar sesión…" oninput="filterList(this.value,'session-maint-list')">
       <div id="session-maint-list" class="entity-list"></div>
@@ -148,28 +149,28 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
         <input id="nuevo-estado-input" class="input-lg" style="max-width:260px" placeholder="Nombre del estado…" onkeydown="if(event.key==='Enter')addEstado()">
-        <button class="btn btn-gold" onclick="addEstado()">➕ Añadir Estado</button>
+        <button class="btn btn-gold" onclick="addEstado()"><span data-ui-icon="plus"></span> Añadir Estado</button>
       </div>
       <div id="estado-list" class="entity-list"></div>
     </div>
     <div id="maint-actos" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Actos</div>
-        <button class="btn btn-gold btn-sm" onclick="openActoModal()">➕ Añadir Acto</button>
+        <button class="btn btn-gold btn-sm" onclick="openActoModal()"><span data-ui-icon="plus"></span> Añadir Acto</button>
       </div>
       <div id="acto-list" class="entity-list"></div>
     </div>
     <div id="maint-eventos" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Eventos</div>
-        <button class="btn btn-gold btn-sm" onclick="openEventoModal()">➕ Añadir Evento</button>
+        <button class="btn btn-gold btn-sm" onclick="openEventoModal()"><span data-ui-icon="plus"></span> Añadir Evento</button>
       </div>
       <div id="evento-list" class="entity-list"></div>
     </div>
     <div id="maint-campanas" class="maint-section">
       <div class="maint-section-header">
         <div class="section-title">Campañas</div>
-        <button class="btn btn-gold btn-sm" onclick="openCampaignModal()">➕ Nueva Campaña</button>
+        <button class="btn btn-gold btn-sm" onclick="openCampaignModal()"><span data-ui-icon="plus"></span> Nueva Campaña</button>
       </div>
       <div id="campaign-list" class="entity-list"></div>
     </div>
@@ -187,7 +188,7 @@
           </label>
         </div>
         <p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:1px;color:var(--gold);text-transform:uppercase">
-          ⚠ Importar sobreescribe todos los datos actuales en Firestore
+          <span data-ui-icon="warning"></span> Importar sobreescribe todos los datos actuales en Firestore
         </p>
       </div>
     </div>
@@ -219,35 +220,35 @@
   <div class="session-grid">
     <!-- DIARIO (fila completa) -->
     <div class="panel" id="panel-diary">
-      <div class="panel-header">📜 Diario de Campaña <span class="readonly-label" id="diary-ro-label" style="display:none">Solo lectura</span></div>
+      <div class="panel-header"><span data-ui-icon="scroll"></span> Diario de Campaña <span class="readonly-label" id="diary-ro-label" style="display:none">Solo lectura</span></div>
       <div class="panel-body">
         <input class="session-title-input" placeholder="Título de la sesión…" data-session-name readonly>
         <textarea class="note-area" placeholder="Resumen y eventos importantes…" data-field="diary"></textarea>
         <!-- Galería de imágenes publicadas desde los actos (visible para todos los usuarios) -->
         <div class="diary-gallery-wrap" style="display:none">
-          <div class="diary-gallery-title">📷 IMÁGENES DEL DIARIO</div>
+          <div class="diary-gallery-title"><span data-ui-icon="camera"></span> IMAGENES DEL DIARIO</div>
           <div class="diary-gallery-grid"></div>
         </div>
       </div>
     </div>
     <!-- ACTOS (solo DM, fila 1 columna derecha) -->
     <div class="panel dm-only-ctrl" id="panel-actos">
-      <div class="panel-header">🗡️ Actos</div>
+      <div class="panel-header"><span data-ui-icon="sword"></span> Actos</div>
       <div class="panel-body">
         <div class="actos-accordion"></div>
       </div>
     </div>
     <!-- EVENTOS (solo DM, fila 2) -->
     <div class="panel dm-only-ctrl" id="panel-eventos-session">
-      <div class="panel-header">🎲 Eventos Aleatorios</div>
+      <div class="panel-header"><span data-ui-icon="dice"></span> Eventos Aleatorios</div>
       <div class="panel-body">
         <div class="eventos-session-wrap">
           <div class="eventos-cat-btns">
-            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Tensión">🔮 Tensión</button>
-            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Combate">⚔️ Combate</button>
-            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Social">💬 Social</button>
-            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Entorno">🌿 Entorno</button>
-            <button class="btn btn-gold btn-sm evt-cat-btn" data-cat="Todos">🎲 Todos</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Tensión"><span data-ui-icon="spark"></span> Tensión</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Combate"><span data-ui-icon="sword"></span> Combate</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Social"><span data-ui-icon="chat"></span> Social</button>
+            <button class="btn btn-outline btn-sm evt-cat-btn" data-cat="Entorno"><span data-ui-icon="leaf"></span> Entorno</button>
+            <button class="btn btn-gold btn-sm evt-cat-btn" data-cat="Todos"><span data-ui-icon="dice"></span> Todos</button>
           </div>
           <div class="eventos-session-result">
             <div class="evr-empty">Selecciona una categoría y asegúrate de tener un acto desplegado.</div>
@@ -258,7 +259,7 @@
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px">
                 <label class="flabel" style="margin:0">Contenido Público</label>
-                <button class="btn btn-outline btn-sm evr-pub-btn">📯 Publicar</button>
+                <button class="btn btn-outline btn-sm evr-pub-btn"><span data-ui-icon="horn"></span> Publicar</button>
               </div>
               <textarea class="note-area evr-public" style="min-height:80px" readonly></textarea>
               <label class="flabel">Contenido Privado</label>
@@ -270,13 +271,13 @@
     </div>
     <!-- BOTONES DE HERRAMIENTAS (columna izquierda, fila 3) -->
     <div class="session-tool-btns">
-      <button class="tool-popup-btn btn-popup-notes" title="Notas">🪶</button>
-      <button class="tool-popup-btn btn-popup-dice" title="Dados">🎲</button>
-      <button class="tool-popup-btn dm-only-ctrl btn-spectator" title="Abrir vista para jugadores">🖥</button>
+      <button class="tool-popup-btn btn-popup-notes" title="Notas"><span data-ui-icon="quill"></span></button>
+      <button class="tool-popup-btn btn-popup-dice" title="Dados"><span data-ui-icon="dice"></span></button>
+      <button class="tool-popup-btn dm-only-ctrl btn-spectator" title="Abrir vista para jugadores"><span data-ui-icon="monitor"></span></button>
     </div>
     <!-- INICIATIVA (columna derecha, fila 2) -->
     <div class="panel" id="panel-init">
-      <div class="panel-header">⚔️ Gestor de Iniciativa</div>
+      <div class="panel-header"><span data-ui-icon="sword"></span> Gestor de Iniciativa</div>
       <div class="panel-body">
         <div class="add-combatant-form dm-only-ctrl">
           <div class="combatant-section-label">Personajes</div>
@@ -306,8 +307,8 @@
   <div class="session-popup popup-notes" style="display:none">
     <div class="session-popup-inner">
       <div class="session-popup-header">
-        <span class="popup-notes-title">📝 Notas</span>
-        <button class="session-popup-close btn-close-notes">✕</button>
+        <span class="popup-notes-title"><span data-ui-icon="quill"></span> Notas</span>
+        <button class="session-popup-close btn-close-notes"><span data-ui-icon="close"></span></button>
       </div>
       <div class="session-popup-body" style="display:flex;flex-direction:column;gap:10px">
         <!-- DM notes (oculto para jugadores via dm-only-ctrl) -->
@@ -317,9 +318,65 @@
           <label class="flabel">Notas Rápidas</label>
           <textarea class="note-area" style="min-height:70px" placeholder="Apuntes al vuelo…" data-field="quick_notes"></textarea>
         </div>
-        <!-- Notas jugador (oculto para DM) -->
+        <!-- Menu de pausa del jugador: bestiario, inventario y notas personales -->
         <div class="player-notes-panel-wrap" style="display:none">
-          <textarea class="note-area" style="min-height:220px" placeholder="Tus notas personales… solo tú las ves." data-field="player_note"></textarea>
+          <div class="player-notebook">
+            <div class="player-notebook-menu is-active" data-notebook-menu>
+              <div class="player-notebook-tabs" aria-label="Cuaderno de personaje">
+                <button type="button" class="player-notebook-tab" data-notebook-open="bestiary">
+                  <span data-ui-icon="mask"></span> Bestiario
+                </button>
+                <button type="button" class="player-notebook-tab" data-notebook-open="inventory">
+                  <span data-ui-icon="scroll"></span> Inventario
+                </button>
+                <button type="button" class="player-notebook-tab" data-notebook-open="notes">
+                  <span data-ui-icon="book"></span> Cuaderno de notas
+                </button>
+              </div>
+            </div>
+
+            <div class="player-notebook-panel" data-notebook-panel="bestiary">
+              <div class="player-notebook-panel-body">
+                <input type="search" class="form-input bestiary-search-input" placeholder="Buscar enemigo conocido..." data-bestiary-search>
+                <div class="bestiary-layout" data-bestiary-layout>
+                  <div>
+                    <div class="bestiary-list" data-bestiary-list></div>
+                    <div class="bestiary-pagination" data-bestiary-pagination></div>
+                  </div>
+                  <div class="bestiary-detail" data-bestiary-detail>
+                    <div class="bestiary-detail-empty">Selecciona una criatura conocida para anotar debilidades, tacticas o recuerdos utiles.</div>
+                  </div>
+                </div>
+              </div>
+              <div class="player-notebook-panel-head">
+                <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-notebook-back>
+                  <span data-ui-icon="back"></span> Volver al menu
+                </button>
+              </div>
+            </div>
+
+            <div class="player-notebook-panel" data-notebook-panel="inventory">
+              <div class="player-notebook-panel-body">
+                <div class="inventory-grid" data-inventory-grid></div>
+              </div>
+              <div class="player-notebook-panel-head">
+                <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-notebook-back>
+                  <span data-ui-icon="back"></span> Volver al menu
+                </button>
+              </div>
+            </div>
+
+            <div class="player-notebook-panel" data-notebook-panel="notes">
+              <div class="player-notebook-panel-body">
+                <textarea class="note-area player-notebook-notes" style="min-height:220px" placeholder="Tus notas personales… solo tú las ves." data-field="player_notebook_notes"></textarea>
+              </div>
+              <div class="player-notebook-panel-head">
+                <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-notebook-back>
+                  <span data-ui-icon="back"></span> Volver al menu
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -329,8 +386,8 @@
   <div class="session-popup popup-dice" style="display:none">
     <div class="session-popup-inner">
       <div class="session-popup-header">
-        <span>🎲 Tiradas de Dados</span>
-        <button class="session-popup-close btn-close-dice">✕</button>
+        <span><span data-ui-icon="dice"></span> Tiradas de Dados</span>
+        <button class="session-popup-close btn-close-dice"><span data-ui-icon="close"></span></button>
       </div>
       <div class="session-popup-body dice-section">
         <div class="dice-result-display"><span class="result-rolls">—</span></div>
@@ -342,7 +399,7 @@
           <button class="dice-btn" data-sides="4">d4</button>
           <button class="dice-btn" data-sides="20">d20</button>
           <button class="dice-btn" data-sides="100">d100</button>
-          <label class="dice-secret-label"><input type="checkbox" class="dice-secret-chk"> 🔒 Secreta</label>
+          <label class="dice-secret-label"><input type="checkbox" class="dice-secret-chk"> <span data-ui-icon="lock"></span> Secreta</label>
           <button class="btn btn-outline btn-sm clear-dice-btn" style="margin-left:auto">Limpiar</button>
         </div>
         <div class="roll-history"></div>
@@ -363,7 +420,7 @@
      Pulsar Enter en el input también ejecuta createSession(). -->
 <div id="modal-new-session" class="modal-overlay">
   <div class="modal" style="max-width:400px">
-    <div class="modal-header"><span>Nueva Sesión</span><button class="modal-close" onclick="closeModal('modal-new-session')">✕</button></div>
+    <div class="modal-header"><span>Nueva Sesión</span><button class="modal-close" onclick="closeModal('modal-new-session')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body">
       <label class="flabel">Nombre de la sesión</label>
       <input id="new-session-name" class="input-lg" placeholder="Sesión 1 — El Comienzo…">
@@ -380,7 +437,7 @@
      La contraseña se guarda como hash ligero; no es criptográfica. -->
 <div id="modal-user" class="modal-overlay">
   <div class="modal" style="max-width:420px">
-    <div class="modal-header"><span id="modal-user-title">Nuevo Usuario</span><button class="modal-close" onclick="closeModal('modal-user')">✕</button></div>
+    <div class="modal-header"><span id="modal-user-title">Nuevo Usuario</span><button class="modal-close" onclick="closeModal('modal-user')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
       <div>
         <label class="flabel">Nombre de usuario</label>
@@ -414,7 +471,7 @@
      (1 / 5 / 15 pts), habilidades especiales con nivel y mochila + notas. -->
 <div id="modal-char" class="modal-overlay">
   <div class="modal" style="max-width:720px">
-    <div class="modal-header"><span id="modal-char-title">Nuevo Personaje</span><button class="modal-close" onclick="closeModal('modal-char')">✕</button></div>
+    <div class="modal-header"><span id="modal-char-title">Nuevo Personaje</span><button class="modal-close" onclick="closeModal('modal-char')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body">
       <div class="section-title">Identidad</div>
       <div class="char-form-grid">
@@ -453,7 +510,7 @@
       <div class="skills-grid" id="cf-weapon-skills-grid"></div>
       <div class="section-title">Habilidades Especiales</div>
       <div id="cf-habs-list" class="habs-list"></div>
-      <button class="btn btn-outline btn-sm" onclick="addHab()">+ Añadir habilidad especial</button>
+      <button class="btn btn-outline btn-sm" onclick="addHab()"><span data-ui-icon="plus"></span> Añadir habilidad especial</button>
       <div class="section-title">Mochila</div>
       <textarea class="note-area" id="cf-backpack" style="min-height:70px" placeholder="Objetos…"></textarea>
       <div class="section-title">Notas</div>
@@ -471,7 +528,7 @@
      una instancia al combate. Solo visible para el DM. -->
 <div id="modal-enemy" class="modal-overlay">
   <div class="modal" style="max-width:560px">
-    <div class="modal-header"><span id="modal-enemy-title">Nuevo Tipo de Enemigo</span><button class="modal-close" onclick="closeModal('modal-enemy')">✕</button></div>
+    <div class="modal-header"><span id="modal-enemy-title">Nuevo Tipo de Enemigo</span><button class="modal-close" onclick="closeModal('modal-enemy')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body">
       <div class="char-form-grid">
         <div class="form-group span2"><label class="flabel">Nombre del tipo</label><input class="form-input" id="ef-name" placeholder="Goblin, Guardia…"></div>
@@ -503,7 +560,7 @@
      "Establecer valor exacto" fija el HP normal directamente. -->
 <div id="modal-hp" class="modal-overlay">
   <div class="modal" style="max-width:320px">
-    <div class="modal-header"><span id="modal-hp-title">Modificar PV</span><button class="modal-close" onclick="closeModal('modal-hp')">✕</button></div>
+    <div class="modal-header"><span id="modal-hp-title">Modificar PV</span><button class="modal-close" onclick="closeModal('modal-hp')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body hp-edit-content">
       <div><span style="color:var(--ink-faded);font-size:.65rem;letter-spacing:1px">PV Normales</span></div>
       <div class="hp-edit-value" id="hp-current-display">10 / 10</div>
@@ -528,7 +585,7 @@
      Los estados se muestran como chips en la tarjeta del combatiente. -->
 <div id="modal-cond" class="modal-overlay">
   <div class="modal" style="max-width:360px">
-    <div class="modal-header"><span>Añadir Condición</span><button class="modal-close" onclick="closeModal('modal-cond')">✕</button></div>
+    <div class="modal-header"><span>Añadir Condición</span><button class="modal-close" onclick="closeModal('modal-cond')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
       <input id="cond-input" class="input-lg" placeholder="Nombre del estado…">
       <div id="cond-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
@@ -546,7 +603,7 @@
      arrastrando en la vista de edición de sesión. -->
 <div id="modal-acto" class="modal-overlay">
   <div class="modal" style="max-width:620px">
-    <div class="modal-header"><span id="modal-acto-title">Nuevo Acto</span><button class="modal-close" onclick="closeModal('modal-acto')">✕</button></div>
+    <div class="modal-header"><span id="modal-acto-title">Nuevo Acto</span><button class="modal-close" onclick="closeModal('modal-acto')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
       <div class="form-group">
         <label class="flabel">Sesión</label>
@@ -568,9 +625,9 @@
         <label class="flabel">Imagen (opcional)</label>
         <div class="acto-img-upload" id="af-img-drop">
           <input type="file" id="af-image" accept="image/*" style="display:none">
-          <span class="acto-img-placeholder" id="af-img-placeholder">📷 Clic para subir imagen</span>
+          <span class="acto-img-placeholder" id="af-img-placeholder"><span data-ui-icon="camera"></span> Clic para subir imagen</span>
           <img id="af-img-preview" class="acto-img-preview" style="display:none" alt="Vista previa">
-          <button type="button" class="btn btn-outline btn-sm" id="af-img-clear" style="display:none" onclick="clearActoImage()">✕ Quitar</button>
+          <button type="button" class="btn btn-outline btn-sm" id="af-img-clear" style="display:none" onclick="clearActoImage()"><span data-ui-icon="close"></span> Quitar</button>
         </div>
       </div>
     </div>
@@ -586,7 +643,7 @@
      aleatorio de ese acto y esa categoría. "Publicar" lo copia al diario. -->
 <div id="modal-evento" class="modal-overlay">
   <div class="modal" style="max-width:620px">
-    <div class="modal-header"><span id="modal-evento-title">Nuevo Evento Aleatorio</span><button class="modal-close" onclick="closeModal('modal-evento')">✕</button></div>
+    <div class="modal-header"><span id="modal-evento-title">Nuevo Evento Aleatorio</span><button class="modal-close" onclick="closeModal('modal-evento')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
       <div class="char-form-grid">
         <div class="form-group">
@@ -632,7 +689,7 @@
      Solo los enemigos seleccionados aparecerán como chips en el panel. -->
 <div id="modal-prepare-combats" class="modal-overlay">
   <div class="modal" style="max-width:520px">
-    <div class="modal-header"><span id="modal-prepare-combats-title">⚔️ Preparar Combates</span><button class="modal-close" onclick="closeModal('modal-prepare-combats')">✕</button></div>
+    <div class="modal-header"><span id="modal-prepare-combats-title"><span data-ui-icon="sword"></span> Preparar Combates</span><button class="modal-close" onclick="closeModal('modal-prepare-combats')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body">
       <p style="font-family:'Crimson Text',serif;font-size:.95rem;color:var(--text-muted);margin-bottom:14px">Selecciona los enemigos que aparecerán en esta sesión. Solo estos estarán disponibles en el panel de combate.</p>
       <div id="prepare-combats-chips" class="combatant-chips-row" style="gap:8px;flex-wrap:wrap;min-height:40px"></div>
@@ -650,7 +707,7 @@
      actual de la campaña abierta (sin usuarios). -->
 <div id="modal-campaign" class="modal-overlay">
   <div class="modal" style="max-width:480px">
-    <div class="modal-header"><span>Nueva Campaña</span><button class="modal-close" onclick="closeModal('modal-campaign')">✕</button></div>
+    <div class="modal-header"><span>Nueva Campaña</span><button class="modal-close" onclick="closeModal('modal-campaign')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
       <div>
         <label class="flabel">Nombre de campaña</label>
@@ -674,7 +731,7 @@
      callback pasado a showConfirm() en app.js. -->
 <div id="modal-confirm" class="modal-overlay">
   <div class="modal" style="max-width:400px">
-    <div class="modal-header"><span id="modal-confirm-title">Confirmar acción</span><button class="modal-close" onclick="closeModal('modal-confirm')">✕</button></div>
+    <div class="modal-header"><span id="modal-confirm-title">Confirmar acción</span><button class="modal-close" onclick="closeModal('modal-confirm')"><span data-ui-icon="close"></span></button></div>
     <div class="modal-body">
       <p id="modal-confirm-msg" style="font-family:'Crimson Text',serif;font-size:1rem;color:var(--text);line-height:1.6"></p>
     </div>
@@ -710,7 +767,7 @@
 <div id="enemy-stat-tooltip" role="tooltip" aria-hidden="true">
   <div class="est-header">
     <span class="est-name"></span>
-    <span class="est-close" onclick="hideEnemyTooltip()">✕</span>
+    <span class="est-close" onclick="hideEnemyTooltip()"><span data-ui-icon="close"></span></span>
   </div>
   <div class="est-stats">
     <div class="est-stat"><span class="est-label">PV</span><span class="est-val est-pv"></span></div>

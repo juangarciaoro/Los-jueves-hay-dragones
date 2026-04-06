@@ -10,6 +10,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot }
   from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+// UI icon catalog lives in a dedicated folder of individual SVG files.
+import { UI_ICONS, loadIcons, paintStaticIcons } from "./ui-icons.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBPplQt9hJDAvyD0Pm0iVudj9wXMnWOzHE",
@@ -25,6 +27,11 @@ const LEGACY_STATE_DOC = doc(db, 'campaign', 'state');
 const CAMPAIGNS_INDEX_DOC = doc(db, 'app', 'campaigns');
 const APP_USERS_DOC = doc(db, 'app', 'users');
 
+// Helpers de marcado para reutilizar los iconos SVG del catalogo externo.
+const withIcon = (icon, label) => `${icon}<span>${label}</span>`;
+const cardIcon = (icon, label) => `<span class="card-icon">${icon}</span><span class="card-label">${label}</span>`;
+const toggleGlyph = collapsed => collapsed ? UI_ICONS.chevronRight : UI_ICONS.chevronDown;
+
 // ===========================
 //  STATE
 //  `state` contiene todos los datos de la campaña cargada:
@@ -35,7 +42,7 @@ const APP_USERS_DOC = doc(db, 'app', 'users');
 //    estados    — condiciones de combate personalizadas
 //    actos      — unidades narrativas de cada sesión
 //    eventos    — eventos aleatorios ligados a actos
-//    playerNotes — mapa {userId: texto} de notas personales
+//    playerNotes — mapa {userId: {notes,bestiary,inventory,encounteredEnemies}}
 //  Las variables de control:
 //    _saveTimeout   — ID del debounce de guardado en Firestore
 //    _unsubscribe   — detiene el listener de la campaña activa
@@ -73,6 +80,399 @@ function normalizeState(data) {
   };
 }
 
+// Normaliza el cuaderno del jugador conservando compatibilidad con el formato legado
+// donde playerNotes[userId] era solo un string de texto libre.
+function getPlayerNotebook(userId) {
+  const raw = state.playerNotes[userId];
+  if (!raw || typeof raw === 'string') {
+    return {
+      notes: typeof raw === 'string' ? raw : '',
+      bestiary: {},
+      inventory: [],
+      encounteredEnemies: []
+    };
+  }
+  const inventory = Array.isArray(raw.inventory) ? raw.inventory : [];
+  return {
+    notes: raw.notes || '',
+    bestiary: raw.bestiary || {},
+    inventory: inventory
+      .map(item => ({
+        name: (item?.name || '').trim(),
+        qty: Math.max(1, Math.min(10, parseInt(item?.qty) || 1))
+      }))
+      .filter(item => item.name)
+      .slice(0, 10),
+    encounteredEnemies: Array.isArray(raw.encounteredEnemies) ? raw.encounteredEnemies.filter(Boolean) : []
+  };
+}
+
+function setPlayerNotebook(userId, notebook) {
+  state.playerNotes[userId] = {
+    notes: notebook.notes || '',
+    bestiary: notebook.bestiary || {},
+    inventory: Array.isArray(notebook.inventory) ? notebook.inventory.filter(item => item?.name).slice(0, 10) : [],
+    encounteredEnemies: Array.isArray(notebook.encounteredEnemies) ? [...new Set(notebook.encounteredEnemies)] : []
+  };
+}
+
+function enemyEncounteredByUser(userId, enemyId) {
+  const notebook = getPlayerNotebook(userId);
+  if (notebook.encounteredEnemies.includes(enemyId)) return true;
+  // Compatibilidad retroactiva: si el enemigo quedó guardado en un combate previo,
+  // lo tratamos como descubierto aunque el array no exista todavía.
+  return state.sessions.some(session => (session.combatants || []).some(c => c.type === 'enemy' && c.enemyId === enemyId));
+}
+
+function registerEncounteredEnemy(enemyId) {
+  globalUsers.filter(u => !u.isDM).forEach(user => {
+    const notebook = getPlayerNotebook(user.id);
+    if (!notebook.encounteredEnemies.includes(enemyId)) {
+      notebook.encounteredEnemies.push(enemyId);
+      setPlayerNotebook(user.id, notebook);
+    }
+  });
+}
+
+function clampNotebookQty(value) {
+  return Math.max(0, Math.min(10, parseInt(value) || 0));
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function normalizeNotebookInventory(inventory) {
+  return (Array.isArray(inventory) ? inventory : [])
+    .map(item => ({
+      name: (item?.name || '').trim(),
+      qty: Math.max(1, Math.min(10, parseInt(item?.qty) || 1))
+    }))
+    .filter(item => item.name)
+    .slice(0, 10);
+}
+
+function autosizeTextarea(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
+
+function autosizeTextareaDeferred(el) {
+  if (!el) return;
+  autosizeTextarea(el);
+  requestAnimationFrame(() => autosizeTextarea(el));
+}
+
+function renderPlayerNotebook(clone) {
+  if (!currentUser) return;
+
+  const wrap = clone.querySelector('.player-notes-panel-wrap');
+  if (!wrap) return;
+
+  const menu = clone.querySelector('[data-notebook-menu]');
+  const menuButtons = Array.from(clone.querySelectorAll('[data-notebook-open]'));
+  const backButtons = Array.from(clone.querySelectorAll('[data-notebook-back]'));
+  const panels = Array.from(clone.querySelectorAll('[data-notebook-panel]'));
+  const notesArea = clone.querySelector('[data-field="player_notebook_notes"]');
+  const bestiarySearch = clone.querySelector('[data-bestiary-search]');
+  const bestiaryLayout = clone.querySelector('[data-bestiary-layout]');
+  const bestiaryList = clone.querySelector('[data-bestiary-list]');
+  const bestiaryPagination = clone.querySelector('[data-bestiary-pagination]');
+  const bestiaryDetail = clone.querySelector('[data-bestiary-detail]');
+  const inventoryGrid = clone.querySelector('[data-inventory-grid]');
+  let activeBestiaryEnemyId = null;
+  let bestiaryFilter = '';
+  let bestiaryPage = 1;
+  const BESTIARY_PAGE_SIZE = 5;
+
+  function getNotebook() {
+    return getPlayerNotebook(currentUser.id);
+  }
+
+  function saveNotebook(notebook) {
+    notebook.inventory = normalizeNotebookInventory(notebook.inventory);
+    setPlayerNotebook(currentUser.id, notebook);
+    saveState();
+  }
+
+  function openNotebookMenu() {
+    if (menu) menu.classList.add('is-active');
+    panels.forEach(panel => panel.classList.remove('is-active'));
+  }
+
+  function openNotebookSection(sectionName) {
+    if (menu) menu.classList.remove('is-active');
+    panels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.notebookPanel === sectionName));
+  }
+
+  function openBestiaryEnemy(enemyId) {
+    const enemy = state.enemies.find(item => item.id === enemyId);
+    if (!enemy || !enemyEncounteredByUser(currentUser.id, enemy.id)) return false;
+    activeBestiaryEnemyId = enemyId;
+    openNotebookSection('bestiary');
+    renderBestiaryList();
+    renderBestiaryDetail();
+    return true;
+  }
+
+  function showBestiaryListView() {
+    if (!bestiaryLayout) return;
+    bestiaryLayout.classList.remove('is-detail-view');
+    if (bestiarySearch) bestiarySearch.style.display = '';
+    if (bestiaryPagination) bestiaryPagination.style.display = '';
+  }
+
+  function showBestiaryDetailView() {
+    if (!bestiaryLayout) return;
+    bestiaryLayout.classList.add('is-detail-view');
+    if (bestiarySearch) bestiarySearch.style.display = 'none';
+    if (bestiaryPagination) bestiaryPagination.style.display = 'none';
+  }
+
+  function renderBestiaryPagination(totalItems) {
+    if (!bestiaryPagination) return;
+
+    const totalPages = Math.max(1, Math.ceil(totalItems / BESTIARY_PAGE_SIZE));
+    bestiaryPage = Math.min(bestiaryPage, totalPages);
+    bestiaryPagination.innerHTML = '';
+
+    if (totalItems <= BESTIARY_PAGE_SIZE) return;
+
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.className = 'btn btn-outline btn-sm';
+    prevBtn.disabled = bestiaryPage === 1;
+    prevBtn.innerHTML = withIcon(UI_ICONS.back, 'Anterior');
+    prevBtn.addEventListener('click', () => {
+      bestiaryPage = Math.max(1, bestiaryPage - 1);
+      renderBestiaryList();
+    });
+
+    const status = document.createElement('span');
+    status.className = 'bestiary-page-status';
+    status.textContent = `Pagina ${bestiaryPage} de ${totalPages}`;
+
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'btn btn-outline btn-sm';
+    nextBtn.disabled = bestiaryPage === totalPages;
+    nextBtn.innerHTML = withIcon(UI_ICONS.next, 'Siguiente');
+    nextBtn.addEventListener('click', () => {
+      bestiaryPage = Math.min(totalPages, bestiaryPage + 1);
+      renderBestiaryList();
+    });
+
+    bestiaryPagination.appendChild(prevBtn);
+    bestiaryPagination.appendChild(status);
+    bestiaryPagination.appendChild(nextBtn);
+  }
+
+  function renderBestiaryDetail() {
+    if (!bestiaryDetail) return;
+
+    const notebook = getNotebook();
+    const enemy = state.enemies.find(item => item.id === activeBestiaryEnemyId);
+    const known = enemy && enemyEncounteredByUser(currentUser.id, enemy.id);
+
+    if (!enemy || !known) {
+      showBestiaryListView();
+      bestiaryDetail.innerHTML = '<div class="bestiary-detail-empty">Selecciona una criatura conocida para anotar debilidades, tacticas o recuerdos utiles.</div>';
+      return;
+    }
+
+    showBestiaryDetailView();
+    bestiaryDetail.innerHTML = `
+      <div class="bestiary-detail-card">
+        <button type="button" class="btn btn-outline btn-sm bestiary-back-btn">${withIcon(UI_ICONS.back, 'Volver al listado')}</button>
+        <div class="bestiary-detail-title">${escapeHtml(enemy.name)}</div>
+        <div class="bestiary-detail-meta">Tus apuntes privados sobre este enemigo.</div>
+        <textarea class="note-area bestiary-note-area" placeholder="Puntos debiles, tacticas, botin, rituales, resistencias..."></textarea>
+      </div>
+    `;
+
+    const backBtn = bestiaryDetail.querySelector('.bestiary-back-btn');
+    backBtn?.addEventListener('click', () => {
+      activeBestiaryEnemyId = null;
+      showBestiaryListView();
+      renderBestiaryList();
+      renderBestiaryDetail();
+    });
+
+    const area = bestiaryDetail.querySelector('.bestiary-note-area');
+    if (!area) return;
+    area.value = notebook.bestiary?.[enemy.id] || '';
+    autosizeTextareaDeferred(area);
+    area.addEventListener('input', () => {
+      autosizeTextarea(area);
+      const nextNotebook = getNotebook();
+      nextNotebook.bestiary = nextNotebook.bestiary || {};
+      nextNotebook.bestiary[enemy.id] = area.value;
+      saveNotebook(nextNotebook);
+    });
+  }
+
+  function renderBestiaryList() {
+    if (!bestiaryList) return;
+
+    bestiaryList.innerHTML = '';
+    if (bestiaryPagination) bestiaryPagination.innerHTML = '';
+    if (!state.enemies.length) {
+      bestiaryList.innerHTML = '<div class="bestiary-empty">No hay enemigos registrados en la campaña.</div>';
+      activeBestiaryEnemyId = null;
+      renderBestiaryDetail();
+      return;
+    }
+
+    const discoveredIds = state.enemies
+      .filter(enemy => enemyEncounteredByUser(currentUser.id, enemy.id))
+      .map(enemy => enemy.id);
+
+    if (activeBestiaryEnemyId && !discoveredIds.includes(activeBestiaryEnemyId)) activeBestiaryEnemyId = null;
+
+    const filteredEnemies = state.enemies.filter(enemy => {
+      const label = enemyEncounteredByUser(currentUser.id, enemy.id) ? enemy.name : '???';
+      return !bestiaryFilter || label.toLowerCase().includes(bestiaryFilter);
+    });
+
+    if (!filteredEnemies.length) {
+      bestiaryList.innerHTML = '<div class="bestiary-empty">No hay resultados para esa busqueda.</div>';
+      return;
+    }
+
+    renderBestiaryPagination(filteredEnemies.length);
+    const start = (bestiaryPage - 1) * BESTIARY_PAGE_SIZE;
+    const pageEnemies = filteredEnemies.slice(start, start + BESTIARY_PAGE_SIZE);
+
+    pageEnemies.forEach(enemy => {
+      const known = enemyEncounteredByUser(currentUser.id, enemy.id);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'bestiary-entry' + (known ? '' : ' is-locked') + (activeBestiaryEnemyId === enemy.id ? ' is-active' : '');
+      button.disabled = !known;
+      button.innerHTML = `
+        <span class="bestiary-entry-name">${known ? escapeHtml(enemy.name) : '???'}</span>
+        <span class="bestiary-entry-state">${known ? 'Conocido' : 'No descubierto'}</span>
+      `;
+      if (known) {
+        button.addEventListener('click', () => {
+          openBestiaryEnemy(enemy.id);
+        });
+      }
+      bestiaryList.appendChild(button);
+    });
+  }
+
+  function renderInventoryGrid() {
+    if (!inventoryGrid) return;
+
+    const notebook = getNotebook();
+    const slots = Array.from({ length: 10 }, (_, index) => notebook.inventory[index] || { name: '', qty: 1 });
+
+    inventoryGrid.innerHTML = '';
+    slots.forEach((item, index) => {
+      const slot = document.createElement('div');
+      slot.className = 'inventory-slot';
+      slot.innerHTML = `
+        <div class="inventory-slot-head">
+          <span class="inventory-slot-label">Hueco ${index + 1}</span>
+        </div>
+        <input type="text" class="form-input inventory-name-input" placeholder="Objeto" value="${escapeHtml(item.name)}">
+        <div class="inventory-qty-row">
+          <button type="button" class="inventory-step-btn" data-delta="-1">${UI_ICONS.down}</button>
+          <input type="number" min="0" max="10" class="qty-input inventory-qty-input" value="${item.name ? item.qty : 1}">
+          <button type="button" class="inventory-step-btn" data-delta="1">${UI_ICONS.up}</button>
+        </div>
+      `;
+
+      const nameInput = slot.querySelector('.inventory-name-input');
+      const qtyInput = slot.querySelector('.inventory-qty-input');
+
+      function commitInventory(nextName, nextQty, { rerender = false } = {}) {
+        const nextNotebook = getNotebook();
+        const inventory = normalizeNotebookInventory(nextNotebook.inventory);
+        while (inventory.length < 10) inventory.push({ name: '', qty: 1 });
+
+        const trimmedName = (nextName || '').trim();
+        const qty = clampNotebookQty(nextQty);
+
+        if (!trimmedName || qty === 0) {
+          inventory[index] = { name: '', qty: 1 };
+        } else {
+          inventory[index] = { name: trimmedName, qty: Math.max(1, qty || 1) };
+        }
+
+        nextNotebook.inventory = inventory.filter(entry => entry.name);
+        saveNotebook(nextNotebook);
+        if (rerender) renderInventoryGrid();
+      }
+
+      nameInput.addEventListener('input', () => {
+        const nextQty = item.name ? qtyInput.value : 1;
+        commitInventory(nameInput.value, nextQty, { rerender: !nameInput.value.trim() });
+      });
+
+      qtyInput.addEventListener('change', () => {
+        commitInventory(nameInput.value, qtyInput.value, { rerender: true });
+      });
+
+      slot.querySelectorAll('.inventory-step-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const baseQty = clampNotebookQty(qtyInput.value || (nameInput.value.trim() ? 1 : 0));
+          const nextQty = baseQty + parseInt(btn.dataset.delta);
+          commitInventory(nameInput.value, nextQty, { rerender: true });
+        });
+      });
+
+      inventoryGrid.appendChild(slot);
+    });
+  }
+
+  menuButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      openNotebookSection(button.dataset.notebookOpen);
+    });
+  });
+
+  backButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      openNotebookMenu();
+    });
+  });
+
+  if (bestiarySearch) {
+    bestiarySearch.addEventListener('input', () => {
+      bestiaryFilter = bestiarySearch.value.trim().toLowerCase();
+      bestiaryPage = 1;
+      renderBestiaryList();
+    });
+  }
+
+  if (notesArea) {
+    notesArea.value = getNotebook().notes || '';
+    autosizeTextarea(notesArea);
+    notesArea.addEventListener('input', () => {
+      autosizeTextarea(notesArea);
+      const notebook = getNotebook();
+      notebook.notes = notesArea.value;
+      saveNotebook(notebook);
+    });
+  }
+
+  clone._openPlayerBestiaryEnemy = enemyId => openBestiaryEnemy(enemyId);
+  clone._openPlayerNotebookMenu = () => openNotebookMenu();
+  openNotebookMenu();
+  showBestiaryListView();
+  renderBestiaryList();
+  renderInventoryGrid();
+  renderBestiaryDetail();
+}
+
 function getCurrentStateDoc() {
   return currentCampaignId ? doc(db, 'campaigns', currentCampaignId) : null;
 }
@@ -98,6 +498,12 @@ function getUniqueCampaignId(name) {
     n++;
   }
   return candidate;
+}
+
+function formatPublishedDiaryEntry(title, content) {
+  const heading = `-${(title || '').trim()}-`;
+  const body = (content || '').trim();
+  return `${heading}\n${body}`.trim();
 }
 
 async function saveCampaignCatalog() {
@@ -529,8 +935,8 @@ function applyRoleUI() {
   const badge = document.getElementById('user-badge');
   badge.innerHTML = realDM
     ? (_playerPreview
-        ? `<span class="role-player">👁 Vista Jugador</span>`
-        : `<span class="role-dm">⚔ DM</span> &nbsp;${currentUser.username}`)
+        ? `<span class="role-player">${UI_ICONS.eye} Vista Jugador</span>`
+        : `<span class="role-dm">${UI_ICONS.sword} DM</span> &nbsp;${currentUser.username}`)
     : `${currentUser.username} &nbsp;<span class="role-player">Jugador</span>`;
 
   // DM-only controls
@@ -595,20 +1001,20 @@ function updateBreadcrumbs(viewId) {
     // Check if we're in landing or content
     const maintLanding = document.getElementById('maint-landing');
     if (maintLanding && maintLanding.style.display !== 'none') {
-      label = isDM() ? '⚙ Mantenimiento' : '📜 Hoja de Usuario';
+      label = isDM() ? 'Mantenimiento' : 'Hoja de Usuario';
     } else {
-      label = isDM() ? '⚙ Mantenimiento' : '📜 Hoja de Usuario';
+      label = isDM() ? 'Mantenimiento' : 'Hoja de Usuario';
     }
     show = true;
   } else if (viewId === 'sessions-list') {
-    label = '📖 Sesiones';
+    label = 'Sesiones';
     show = true;
   } else if (viewId === 'session-edit') {
     const editSession = state.sessions.find(s => s.id === _editSessionId);
-    label = editSession ? `✎ ${editSession.name}` : '✎ Preparar sesión';
+    label = editSession ? editSession.name : 'Preparar sesión';
     show = true;
   } else if (viewId === 'charsheet') {
-    label = '📜 Hoja de Personaje';
+    label = 'Hoja de Personaje';
     show = true;
   } else {
     const session = state.sessions.find(s => s.id === viewId);
@@ -670,15 +1076,15 @@ function switchMaintSection(name, btn) {
   
   // Update breadcrumbs with section name
   const sectionNames = {
-    personajes: '👤 Personajes',
-    sesiones: '📜 Sesiones',
-    enemigos: '👹 Tipos de Enemigos',
-    usuarios: '👥 Usuarios',
-    campanas: '🗺 Campañas',
-    estados: '⚡ Estados',
-    actos: '🗡️ Actos',
-    eventos: '🎲 Eventos Aleatorios',
-    backup: '💾 Copia de Seguridad'
+    personajes: 'Personajes',
+    sesiones: 'Sesiones',
+    enemigos: 'Tipos de Enemigos',
+    usuarios: 'Usuarios',
+    campanas: 'Campañas',
+    estados: 'Estados',
+    actos: 'Actos',
+    eventos: 'Eventos Aleatorios',
+    backup: 'Copia de Seguridad'
   };
   
   const current = document.getElementById('breadcrumb-current');
@@ -696,15 +1102,15 @@ function renderMaintLanding() {
   container.innerHTML = '';
   
   const sections = [
-    { id: 'sesiones', name: 'Sesiones', icon: '📜', dmOnly: true },
-    { id: 'actos', name: 'Actos', icon: '🗡️', dmOnly: true },
-    { id: 'eventos', name: 'Eventos Aleatorios', icon: '🎲', dmOnly: true },
-    { id: 'enemigos', name: 'Tipos de Enemigos', icon: '💀', alwaysShow: true },
-    { id: 'estados', name: 'Estados', icon: '🔮', dmOnly: true },
-    { id: 'personajes', name: 'Personajes', icon: '⚔️', alwaysShow: true },
-    { id: 'usuarios', name: 'Usuarios', icon: '🛡️', dmOnly: true },
-    { id: 'campanas', name: 'Campañas', icon: '🏰', dmOnly: true },
-    { id: 'backup', name: 'Copia de Seguridad', icon: '🗝️', dmOnly: true }
+    { id: 'sesiones', name: 'Sesiones', icon: UI_ICONS.scroll, dmOnly: true },
+    { id: 'actos', name: 'Actos', icon: UI_ICONS.sword, dmOnly: true },
+    { id: 'eventos', name: 'Eventos Aleatorios', icon: UI_ICONS.dice, dmOnly: true },
+    { id: 'enemigos', name: 'Tipos de Enemigos', icon: UI_ICONS.skull, alwaysShow: true },
+    { id: 'estados', name: 'Estados', icon: UI_ICONS.spark, dmOnly: true },
+    { id: 'personajes', name: 'Personajes', icon: UI_ICONS.helm, alwaysShow: true },
+    { id: 'usuarios', name: 'Usuarios', icon: UI_ICONS.users, dmOnly: true },
+    { id: 'campanas', name: 'Campañas', icon: UI_ICONS.castle, dmOnly: true },
+    { id: 'backup', name: 'Copia de Seguridad', icon: UI_ICONS.key, dmOnly: true }
   ];
   
   const counts = {
@@ -752,10 +1158,10 @@ function renderLandingPage() {
   const btn1 = document.createElement('button');
   btn1.className = 'landing-card';
   if (dm) {
-    btn1.innerHTML = '<span class="card-icon">⚒️</span><span class="card-label">Mantenimiento</span>';
+    btn1.innerHTML = cardIcon(UI_ICONS.gear, 'Mantenimiento');
     btn1.onclick = () => switchView('maint');
   } else {
-    btn1.innerHTML = '<span class="card-icon">📜</span><span class="card-label">Hoja de Usuario</span>';
+    btn1.innerHTML = cardIcon(UI_ICONS.scroll, 'Hoja de Usuario');
     btn1.onclick = () => switchView('charsheet');
   }
   container.appendChild(btn1);
@@ -763,7 +1169,7 @@ function renderLandingPage() {
   // Button 2: Sesiones
   const btn2 = document.createElement('button');
   btn2.className = 'landing-card';
-  btn2.innerHTML = '<span class="card-icon">📖</span><span class="card-label">Sesiones</span>';
+  btn2.innerHTML = cardIcon(UI_ICONS.book, 'Sesiones');
   btn2.onclick = () => switchView('sessions-list');
   container.appendChild(btn2);
 }
@@ -834,7 +1240,7 @@ function renderSessionEditView() {
 
   let html = `
     <div class="se-header">
-      <button class="btn btn-outline btn-sm" onclick="switchView('maint');switchMaintSection('sesiones',null)">← Sesiones</button>
+      <button class="btn btn-outline btn-sm" onclick="switchView('maint');switchMaintSection('sesiones',null)">${withIcon(UI_ICONS.back, 'Sesiones')}</button>
       <span class="se-session-name">${session.name}</span>
       <span style="font-family:'Crimson Text',serif;font-size:.9rem;color:var(--text-muted)">${actos.length} acto${actos.length!==1?'s':''} · ${state.eventos.filter(e=>e.sessionId===session.id).length} eventos</span>
     </div>`;
@@ -857,12 +1263,12 @@ function renderSessionEditView() {
     const isFirst = actos.indexOf(acto) === 0;
     const isLast  = actos.indexOf(acto) === actos.length - 1;
     actoHeader.innerHTML = `
-      <span class="se-acto-title">📜 ${acto.title}</span>
+      <span class="se-acto-title">${UI_ICONS.scroll} ${acto.title}</span>
       <span style="font-family:'Crimson Text',serif;font-size:.82rem;color:var(--text-muted)">${eventos.length} evento${eventos.length!==1?'s':''}</span>
-      <button class="btn btn-outline btn-xs" ${isFirst?'disabled':''} onclick="moveActo('${acto.id}',-1)">▲</button>
-      <button class="btn btn-outline btn-xs" ${isLast?'disabled':''} onclick="moveActo('${acto.id}',1)">▼</button>
-      <button class="btn btn-outline btn-sm" onclick="openActoModal('${acto.id}','${session.id}')">✎ Editar</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">✕ Borrar</button>`;
+      <button class="btn btn-outline btn-xs" ${isFirst?'disabled':''} onclick="moveActo('${acto.id}',-1)" title="Mover arriba">${UI_ICONS.up}</button>
+      <button class="btn btn-outline btn-xs" ${isLast?'disabled':''} onclick="moveActo('${acto.id}',1)" title="Mover abajo">${UI_ICONS.down}</button>
+      <button class="btn btn-outline btn-sm" onclick="openActoModal('${acto.id}','${session.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>`;
     block.appendChild(actoHeader);
 
     // Events list
@@ -880,8 +1286,8 @@ function renderSessionEditView() {
       row.innerHTML = `
         <span class="se-event-cat" style="color:${color};background:${bg}">${ev.categoria}</span>
         <span class="se-event-title">${ev.title}</span>
-        <button class="btn btn-outline btn-sm" onclick="openEventoModal('${ev.id}','${session.id}','${acto.id}')">✎</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteEvento('${ev.id}')">✕</button>`;
+        <button class="btn btn-outline btn-sm" onclick="openEventoModal('${ev.id}','${session.id}','${acto.id}')" title="Editar">${UI_ICONS.edit}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEvento('${ev.id}')" title="Borrar">${UI_ICONS.close}</button>`;
       evList.appendChild(row);
     });
     block.appendChild(evList);
@@ -889,7 +1295,7 @@ function renderSessionEditView() {
     // Add event button
     const addEvRow = document.createElement('div');
     addEvRow.className = 'se-add-row';
-    addEvRow.innerHTML = `<button class="btn btn-outline btn-sm" onclick="openEventoModal(null,'${session.id}','${acto.id}')">＋ Añadir evento a este acto</button>`;
+    addEvRow.innerHTML = `<button class="btn btn-outline btn-sm" onclick="openEventoModal(null,'${session.id}','${acto.id}')">${withIcon(UI_ICONS.plus, 'Añadir evento a este acto')}</button>`;
     block.appendChild(addEvRow);
 
     wrap.appendChild(block);
@@ -898,7 +1304,7 @@ function renderSessionEditView() {
   // Add acto button
   const addActo = document.createElement('div');
   addActo.className = 'se-add-acto-row';
-  addActo.innerHTML = `<button class="btn btn-gold btn-sm" onclick="openActoModal(null,'${session.id}')">＋ Añadir acto a esta sesión</button>`;
+  addActo.innerHTML = `<button class="btn btn-gold btn-sm" onclick="openActoModal(null,'${session.id}')">${withIcon(UI_ICONS.plus, 'Añadir acto a esta sesión')}</button>`;
   wrap.appendChild(addActo);
 
   // Enemy selector
@@ -907,7 +1313,7 @@ function renderSessionEditView() {
   enemiesSection.className = 'se-enemies-section';
   const eTitle = document.createElement('div');
   eTitle.className = 'se-enemies-title';
-  eTitle.textContent = '⚔ Enemigos de la sesión';
+  eTitle.innerHTML = withIcon(UI_ICONS.sword, 'Enemigos de la sesión');
   enemiesSection.appendChild(eTitle);
   const eChips = document.createElement('div');
   eChips.className = 'se-enemies-chips';
@@ -1018,13 +1424,13 @@ function renderSessionList() {
     const isPublished = !!session.published;
     card.classList.add(isPublished ? 'session-card--published' : 'session-card--unpublished');
     const pubBtn = isPublished
-      ? `<button class="btn btn-sm btn-published" onclick="toggleSessionPublished('${session.id}')">🌐 Publicada</button>`
-      : `<button class="btn btn-sm btn-unpublished" onclick="toggleSessionPublished('${session.id}')">🔒 No publicada</button>`;
+      ? `<button class="btn btn-sm btn-published" onclick="toggleSessionPublished('${session.id}')">${withIcon(UI_ICONS.globe, 'Publicada')}</button>`
+      : `<button class="btn btn-sm btn-unpublished" onclick="toggleSessionPublished('${session.id}')">${withIcon(UI_ICONS.lock, 'No publicada')}</button>`;
     const actionBtns = dm
       ? `${pubBtn}
-         <button class="btn btn-outline btn-sm" onclick="openSessionEdit('${session.id}')">✎ Preparar</button>
+         <button class="btn btn-outline btn-sm" onclick="openSessionEdit('${session.id}')">${withIcon(UI_ICONS.edit, 'Preparar')}</button>
          <button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>
-         <button class="btn btn-danger btn-sm" onclick="deleteSession('${session.id}')">✕ Borrar</button>`
+         <button class="btn btn-danger btn-sm" onclick="deleteSession('${session.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>`
       : `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>`;
     
     const actosCount  = state.actos.filter(a => a.sessionId === session.id).length;
@@ -1084,7 +1490,7 @@ function openPrepareCombatsModal(sessionId) {
   _prepareCombatsSelected  = new Set(session.allowedEnemies || []);
 
   const title = document.getElementById('modal-prepare-combats-title');
-  if (title) title.textContent = `⚔ Preparar Combates — ${session.name}`;
+  if (title) title.innerHTML = `${UI_ICONS.sword} Preparar Combates — ${session.name}`;
 
   const wrap  = document.getElementById('prepare-combats-chips');
   const empty = document.getElementById('prepare-combats-empty');
@@ -1196,6 +1602,7 @@ function buildSessionView(session) {
   // Bind text fields
   clone.querySelectorAll('[data-field]').forEach(el => {
     const field = el.dataset.field;
+    if (field === 'player_notebook_notes') return;
     el.value = session[field] || '';
     if (!el.hasAttribute('readonly')) {
       el.addEventListener('input', () => { session[field] = el.value; saveState(); });
@@ -1205,18 +1612,9 @@ function buildSessionView(session) {
   // DM-only sections
   if (!dm) {
     clone.querySelectorAll('.dm-only-ctrl').forEach(el => el.style.display = 'none');
-    // Show player notes panel
     const pnw = clone.querySelector('.player-notes-panel-wrap');
     if (pnw) pnw.style.display = '';
-    // Bind player notes (global per-user, shared across all sessions)
-    const pnArea = clone.querySelector('[data-field="player_note"]');
-    if (pnArea && currentUser) {
-      pnArea.value = state.playerNotes[currentUser.id] || '';
-      pnArea.addEventListener('input', () => {
-        state.playerNotes[currentUser.id] = pnArea.value;
-        saveState();
-      });
-    }
+    renderPlayerNotebook(clone);
   }
 
   // Popup buttons
@@ -1225,10 +1623,12 @@ function buildSessionView(session) {
   const diceBtn     = clone.querySelector('.btn-popup-dice');
   const dicePopup   = clone.querySelector('.popup-dice');
 
-  notesBtn.textContent = dm ? '🗒' : '📝';
-  notesBtn.title       = dm ? 'Notas del DM' : 'Mi Cuaderno';
+  if (notesBtn) {
+    notesBtn.innerHTML = dm ? UI_ICONS.quill : UI_ICONS.book;
+    notesBtn.title = dm ? 'Notas del DM' : 'Mi Cuaderno';
+  }
   const notesPopupTitle = clone.querySelector('.popup-notes-title');
-  if (notesPopupTitle) notesPopupTitle.textContent = dm ? '🗒 Notas del DM' : '📝 Mi Cuaderno';
+  if (notesPopupTitle) notesPopupTitle.innerHTML = dm ? `${UI_ICONS.quill} Notas del DM` : `${UI_ICONS.book} Mi Cuaderno`;
 
   function openPopup(popup, btn) {
     popup.style.display = 'flex';
@@ -1238,19 +1638,32 @@ function buildSessionView(session) {
     popup.style.display = 'none';
     btn.classList.remove('active');
   }
-  notesBtn.addEventListener('click', () => {
-    if (notesPopup.style.display === 'none') { openPopup(notesPopup, notesBtn); closePopup(dicePopup, diceBtn); }
-    else closePopup(notesPopup, notesBtn);
-  });
-  clone.querySelector('.btn-close-notes').addEventListener('click', () => closePopup(notesPopup, notesBtn));
-  notesPopup.addEventListener('click', e => { if (e.target === notesPopup) closePopup(notesPopup, notesBtn); });
+  if (notesBtn && notesPopup) {
+    notesBtn.addEventListener('click', () => {
+      if (notesPopup.style.display === 'none') {
+        if (!dm) clone._openPlayerNotebookMenu?.();
+        openPopup(notesPopup, notesBtn);
+        if (dicePopup && diceBtn) closePopup(dicePopup, diceBtn);
+      } else {
+        closePopup(notesPopup, notesBtn);
+      }
+    });
+    clone.querySelector('.btn-close-notes')?.addEventListener('click', () => closePopup(notesPopup, notesBtn));
+    notesPopup.addEventListener('click', e => { if (e.target === notesPopup) closePopup(notesPopup, notesBtn); });
+  }
 
-  diceBtn.addEventListener('click', () => {
-    if (dicePopup.style.display === 'none') { openPopup(dicePopup, diceBtn); closePopup(notesPopup, notesBtn); }
-    else closePopup(dicePopup, diceBtn);
-  });
-  clone.querySelector('.btn-close-dice').addEventListener('click', () => closePopup(dicePopup, diceBtn));
-  dicePopup.addEventListener('click', e => { if (e.target === dicePopup) closePopup(dicePopup, diceBtn); });
+  if (diceBtn && dicePopup) {
+    diceBtn.addEventListener('click', () => {
+      if (dicePopup.style.display === 'none') {
+        openPopup(dicePopup, diceBtn);
+        if (notesPopup && notesBtn) closePopup(notesPopup, notesBtn);
+      } else {
+        closePopup(dicePopup, diceBtn);
+      }
+    });
+    clone.querySelector('.btn-close-dice')?.addEventListener('click', () => closePopup(dicePopup, diceBtn));
+    dicePopup.addEventListener('click', e => { if (e.target === dicePopup) closePopup(dicePopup, diceBtn); });
+  }
 
   // Dice
   const rollDisplay = clone.querySelector('.result-rolls');
@@ -1274,11 +1687,11 @@ function buildSessionView(session) {
       renderRollHistory(session, rollHistory);
     });
   });
-  clone.querySelector('.clear-dice-btn').addEventListener('click', () => {
+  clone.querySelector('.clear-dice-btn')?.addEventListener('click', () => {
     session.rollHistory = [];
     saveState();
-    rollHistory.innerHTML = '';
-    rollDisplay.textContent = '—';
+    if (rollHistory) rollHistory.innerHTML = '';
+    if (rollDisplay) rollDisplay.textContent = '—';
   });
 
   // Initiative
@@ -1382,9 +1795,11 @@ function wireSessionEventos(session, clone) {
   clone.querySelector('.evr-pub-btn').addEventListener('click', () => {
     const text = clone.querySelector('.evr-public').value;
     if (!text) return;
+    const title = clone.querySelector('.evr-title')?.textContent || 'Evento';
+    const entry = formatPublishedDiaryEntry(title, text);
     const diary = clone.querySelector('[data-field="diary"]');
     if (diary) {
-      diary.value = diary.value ? diary.value + '\n\n' + text : text;
+      diary.value = diary.value ? diary.value + '\n\n' + entry : entry;
       session.diary = diary.value;
       saveState();
     }
@@ -1422,13 +1837,14 @@ function renderSessionActos(session, clone) {
     pubLabel.textContent = 'Contenido Público';
     const pubBtn = document.createElement('button');
     pubBtn.className = 'btn btn-outline btn-sm';
-    pubBtn.textContent = '📢 Publicar';
+    pubBtn.innerHTML = withIcon(UI_ICONS.horn, 'Publicar');
     pubBtn.addEventListener('click', () => {
       const text = acto.public || '';
       if (!text) return;
+      const entry = formatPublishedDiaryEntry(acto.title, text);
       const diary = clone.querySelector('[data-field="diary"]');
       if (diary) {
-        diary.value = diary.value ? diary.value + '\n\n' + text : text;
+        diary.value = diary.value ? diary.value + '\n\n' + entry : entry;
         session.diary = diary.value;
         saveState();
       }
@@ -1462,12 +1878,12 @@ function renderSessionActos(session, clone) {
       imgRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;';
       const imgLabel = document.createElement('label');
       imgLabel.className = 'flabel'; imgLabel.style.margin = '0';
-      imgLabel.textContent = '🖼️ Imagen';
+      imgLabel.innerHTML = withIcon(UI_ICONS.camera, 'Imagen');
       imgRow.appendChild(imgLabel);
       if (isDM()) {
         const imgPubBtn = document.createElement('button');
         imgPubBtn.className = 'btn btn-outline btn-sm';
-        imgPubBtn.textContent = '📷 Publicar imagen';
+        imgPubBtn.innerHTML = withIcon(UI_ICONS.camera, 'Publicar imagen');
         imgPubBtn.addEventListener('click', () => publishActoImage(session, acto, clone));
         imgRow.appendChild(imgPubBtn);
       }
@@ -1515,7 +1931,7 @@ function renderRollHistory(session, el) {
     if (e.isDMroll && !dm) return;
     if (e.secret && !dm && e.user !== currentUser?.username) return;
     const d = document.createElement('div'); d.className = 'roll-entry';
-    const badge = e.secret ? ' <span class="roll-badge secret">🔒</span>' : (e.isDMroll ? ' <span class="roll-badge dm">🎭</span>' : '');
+    const badge = e.secret ? ` <span class="roll-badge secret">${UI_ICONS.lock}</span>` : (e.isDMroll ? ` <span class="roll-badge dm">${UI_ICONS.mask}</span>` : '');
     d.innerHTML = `<span><span class="ru">${e.user||'?'}</span>${badge}<span class="rl">${e.label}</span></span><span class="rv">${e.rolls.length>1?'['+e.rolls.join(',')+'] = ':''}${e.total}</span>`;
     el.appendChild(d);
   });
@@ -1565,6 +1981,7 @@ function renderCombatantChips(clone, session) {
     chip.onclick = () => {
       const rndInit = Math.ceil(Math.random() * 20);
       session.combatants.push({ id:uid(), name:enemy.name, enemyId:enemy.id, init:rndInit, hp:enemy.pv||10, maxHp:enemy.pv||10, tempHp:0, type:'enemy', dead:false, conditions:[] });
+      registerEncounteredEnemy(enemy.id);
       session.combatants.sort((a,b) => b.init - a.init);
       saveState();
       renderCombatantList(session, clone);
@@ -1629,17 +2046,35 @@ function renderCombatantList(session, clone) {
       <div class="conditions-wrap"></div>
       <div class="dead-btns-corner ${dm?'':'player-hide'}">
         <button class="dead-btn">${c.dead?'♻':'☠'}</button>
-        <button class="dead-btn" style="border-color:var(--ink-faded);color:var(--ink-faded)">✕</button>
+        <button class="dead-btn" style="border-color:var(--ink-faded);color:var(--ink-faded)">${UI_ICONS.close}</button>
       </div>
-      ${dm && c.type==='enemy' && c.enemyId ? '<button class="enemy-info-btn" title="Ver ficha del enemigo">ⓘ</button>' : ''}`;
+      ${(c.type==='enemy' && c.enemyId && (dm || !c.dead)) ? `<button class="enemy-info-btn${dm ? '' : ' enemy-info-btn-player'}" title="${dm ? 'Ver ficha del enemigo' : 'Abrir bestiario'}">${UI_ICONS.eye}</button>` : ''}`;
 
     // Info button hover — DM only, enemy with template
-    if (dm && c.type === 'enemy' && c.enemyId) {
+    if (c.type === 'enemy' && c.enemyId) {
       const infoBtn = card.querySelector('.enemy-info-btn');
-      if (infoBtn) {
+      if (infoBtn && dm) {
         infoBtn.addEventListener('mouseenter', () => showEnemyTooltip(c.enemyId, infoBtn));
         infoBtn.addEventListener('mouseleave', scheduleHideEnemyTooltip);
         infoBtn.addEventListener('click', e => { e.stopPropagation(); showEnemyTooltip(c.enemyId, infoBtn); });
+      } else if (infoBtn && !dm) {
+        infoBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          const opened = clone._openPlayerBestiaryEnemy?.(c.enemyId);
+          if (!opened) return;
+          const notesBtn = clone.querySelector('.btn-popup-notes');
+          const notesPopup = clone.querySelector('.popup-notes');
+          const diceBtn = clone.querySelector('.btn-popup-dice');
+          const dicePopup = clone.querySelector('.popup-dice');
+          if (notesBtn && notesPopup) {
+            notesPopup.style.display = 'flex';
+            notesBtn.classList.add('active');
+          }
+          if (diceBtn && dicePopup) {
+            dicePopup.style.display = 'none';
+            diceBtn.classList.remove('active');
+          }
+        });
       }
     }
 
@@ -1647,7 +2082,7 @@ function renderCombatantList(session, clone) {
     const condWrap = card.querySelector('.conditions-wrap');
     c.conditions.forEach((cond, ci) => {
       const tag = document.createElement('span'); tag.className = 'condition-tag';
-      tag.textContent = cond + (canControl ? ' ✕' : '');
+      tag.innerHTML = canControl ? `${cond} ${UI_ICONS.close}` : cond;
       if (canControl) tag.onclick = () => { c.conditions.splice(ci,1); saveState(); renderCombatantList(session, clone); };
       condWrap.appendChild(tag);
     });
@@ -1881,7 +2316,7 @@ function renderEstadoList() {
         <span class="entity-name">${e.nombre}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-danger btn-sm" onclick="deleteEstado('${e.id}')">✕ Borrar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEstado('${e.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>
       </div>`;
     list.appendChild(card);
   });
@@ -1966,8 +2401,8 @@ function renderActoList() {
         <div class="entity-actions">
           <button class="btn btn-outline btn-xs" ${isFirst?'disabled':''} onclick="moveActo('${a.id}',-1)">▲</button>
           <button class="btn btn-outline btn-xs" ${isLast?'disabled':''} onclick="moveActo('${a.id}',1)">▼</button>
-          <button class="btn btn-outline btn-sm" onclick="openActoModal('${a.id}')">✎ Editar</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteActo('${a.id}')">✕ Borrar</button>
+          <button class="btn btn-outline btn-sm" onclick="openActoModal('${a.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteActo('${a.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>
         </div>`;
       childWrap.appendChild(row);
     });
@@ -2153,7 +2588,7 @@ function renderSessionGallery(session, clone) {
     if (isDM()) {
       const removeBtn = document.createElement('button');
       removeBtn.className = 'btn btn-danger btn-xs diary-gallery-remove';
-      removeBtn.textContent = '✕'; removeBtn.title = 'Retirar del diario';
+      removeBtn.innerHTML = UI_ICONS.close; removeBtn.title = 'Retirar del diario';
       removeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         session.publishedImages = session.publishedImages.filter(i => i.id !== entry.id);
@@ -2251,8 +2686,8 @@ function renderEventoList() {
             <span class="evento-cat-badge" style="color:${color}">${e.categoria}</span>
           </div>
           <div class="entity-actions">
-            <button class="btn btn-outline btn-sm" onclick="openEventoModal('${e.id}')">✎ Editar</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteEvento('${e.id}')">✕ Borrar</button>
+            <button class="btn btn-outline btn-sm" onclick="openEventoModal('${e.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteEvento('${e.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>
           </div>`;
         actoChildren.appendChild(row);
       });
@@ -2388,7 +2823,7 @@ function addHab() {
     <button type="button" class="cost-btn" data-hab-id="${habId}" data-level="5">●●○</button>
     <button type="button" class="cost-btn" data-hab-id="${habId}" data-level="15">●●●</button>
   </div>
-  <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+      <button class="remove-btn" onclick="this.parentElement.remove()">${UI_ICONS.close}</button>`;
   row.dataset.habId = habId;
   row.querySelectorAll('[data-level]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -2462,7 +2897,7 @@ function openCharModal(id) {
       <button type="button" class="cost-btn ${level===5?'sel5':''}" data-hab-id="${habId}" data-level="5">●●○</button>
       <button type="button" class="cost-btn ${level===15?'sel15':''}" data-hab-id="${habId}" data-level="15">●●●</button>
     </div>
-    <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+      <button class="remove-btn" onclick="this.parentElement.remove()">${UI_ICONS.close}</button>`;
     row.querySelectorAll('[data-level]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -2527,8 +2962,8 @@ function renderCharList() {
         <span class="entity-meta">PV ${c.vida} | PM ${c.pm} | FUE ${c.fue} INT ${c.int} CAR ${c.car} DES ${c.des}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-outline btn-sm" onclick="openCharModal('${c.id}')">✎ Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteChar('${c.id}')">✕ Borrar</button>
+        <button class="btn btn-outline btn-sm" onclick="openCharModal('${c.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteChar('${c.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>
       </div>`;
     list.appendChild(card);
   });
@@ -2578,7 +3013,7 @@ function renderCharSheetView(char) {
   view.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <h2 style="font-family:'Cinzel Decorative',serif;color:var(--gold);font-size:1.1rem">${char.name}</h2>
-      <button class="btn btn-gold btn-sm" onclick="openCharModal('${char.id}')">✎ Editar</button>
+        <button class="btn btn-gold btn-sm" onclick="openCharModal('${char.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
     </div>
     <div class="charsheet-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="panel">
@@ -2675,7 +3110,7 @@ function renderEnemyList() {
   const list=document.getElementById('enemy-list'); list.innerHTML='';
   state.enemies.forEach(e=>{
     const card=document.createElement('div'); card.className='entity-card';
-    const actions=isDM()?`<button class="btn btn-outline btn-sm" onclick="openEnemyModal('${e.id}')">✎ Editar</button><button class="btn btn-outline btn-sm" onclick="cloneEnemy('${e.id}')" title="Clonar">⧉ Clonar</button><button class="btn btn-danger btn-sm" onclick="deleteEnemy('${e.id}')">✕ Borrar</button>`:'';
+    const actions=isDM()?`<button class="btn btn-outline btn-sm" onclick="openEnemyModal('${e.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button><button class="btn btn-outline btn-sm" onclick="cloneEnemy('${e.id}')" title="Clonar">${withIcon(UI_ICONS.copy, 'Clonar')}</button><button class="btn btn-danger btn-sm" onclick="deleteEnemy('${e.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>`:'';
     card.innerHTML=`
       <div class="entity-card-info">
         <span class="entity-name">${e.name}</span>
@@ -2763,11 +3198,11 @@ function renderUserList() {
     card.innerHTML=`
       <div class="entity-card-info">
         <span class="entity-name">${u.username}</span>
-        <span class="entity-meta">${u.isDM?'⚔ Director de Juego':'Jugador'}${linkedChar?' · '+linkedChar.name:''}</span>
+        <span class="entity-meta">${u.isDM?`${UI_ICONS.sword} Director de Juego`:'Jugador'}${linkedChar?' · '+linkedChar.name:''}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-outline btn-sm" onclick="openUserModal('${u.id}')">✎ Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">✕ Borrar</button>
+        <button class="btn btn-outline btn-sm" onclick="openUserModal('${u.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">${withIcon(UI_ICONS.close, 'Borrar')}</button>
       </div>`;
     list.appendChild(card);
   });
@@ -3028,6 +3463,10 @@ function openSpectatorWindow(sessionId) {
 //  4. Restaurar la sesión previa guardada en sessionStorage
 //     (campdëa y usuario) para no forzar login tras un refresco.
 // ===========================
+// Carga el catalogo SVG y luego reemplaza los placeholders estaticos del HTML.
+await loadIcons();
+paintStaticIcons();
+
 (async () => {
   // Spectator mode: show initiative-only view without login
   const qs = new URLSearchParams(window.location.search);
