@@ -4,6 +4,7 @@ import { state, isDM, currentUser, globalUsers } from './state.js';
 import { saveState } from './persist.js';
 import { saveGlobalUsers } from './persist.js';
 import { openModal, closeModal, showConfirm, showToast } from './ui.js';
+import { ICONS } from './icons.js';
 import { getSession } from './state.js';
 import { renderCombatantChips } from './combat.js';
 
@@ -59,7 +60,7 @@ export function addHab() {
     <button type="button" class="cost-btn" data-hab-id="${habId}" data-level="5">●●○</button>
     <button type="button" class="cost-btn" data-hab-id="${habId}" data-level="15">●●●</button>
   </div>
-  <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+  <button class="remove-btn" onclick="this.parentElement.remove()">${ICONS.x}</button>`;
   row.querySelectorAll('[data-level]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.preventDefault();
@@ -145,7 +146,7 @@ export function openCharModal(id) {
         <button type="button" class="cost-btn ${level===5?'sel5':''}"  data-hab-id="${habId}" data-level="5">●●○</button>
         <button type="button" class="cost-btn ${level===15?'sel15':''}" data-hab-id="${habId}" data-level="15">●●●</button>
       </div>
-      <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+      <button class="remove-btn" onclick="this.parentElement.remove()">${ICONS.x}</button>`;
       row.querySelectorAll('[data-level]').forEach(btn => {
         btn.addEventListener('click', e => {
           e.preventDefault();
@@ -223,8 +224,8 @@ export function renderCharList() {
         <span class="entity-meta">PV ${c.vida} | PM ${c.pm} | FUE ${c.fue} INT ${c.int} CAR ${c.car} DES ${c.des}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-outline btn-sm" onclick="window._g.openCharModal('${c.id}')">✎ Editar</button>
-        <button class="btn btn-danger btn-sm"  onclick="window._g.deleteChar('${c.id}')">✕ Borrar</button>
+        <button class="btn btn-outline btn-sm" onclick="window._g.openCharModal('${c.id}')">${ICONS.pencil} Editar</button>
+        <button class="btn btn-danger btn-sm"  onclick="window._g.deleteChar('${c.id}')">${ICONS.x} Borrar</button>
       </div>`;
     list.appendChild(card);
   });
@@ -263,7 +264,7 @@ export function renderCharSheetView(char) {
   view.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <h2 style="font-family:'Cinzel Decorative',serif;color:var(--gold);font-size:1.1rem">${char.name}</h2>
-      <button class="btn btn-gold btn-sm" onclick="window._g.openCharModal('${char.id}')">✎ Editar</button>
+      <button class="btn btn-gold btn-sm" onclick="window._g.openCharModal('${char.id}')">${ICONS.pencil} Editar</button>
     </div>
     <div class="charsheet-grid">
       <div class="panel">

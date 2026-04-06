@@ -77,3 +77,41 @@ body{
 
 /* Inline checkbox accent */
 input[type=checkbox]{accent-color:var(--gold-light);}
+
+/* ===== SVG ICONS ===== */
+.icon{
+  display:inline-block;
+  vertical-align:middle;
+  flex-shrink:0;
+  pointer-events:none;
+  color:inherit;
+}
+/* Icon + text gap when icon precedes text */
+.icon + *,
+.icon + :not(.icon){margin-left:4px;}
+/* Buttons / spans that are icon-only */
+.modal-close .icon,
+.session-popup-close .icon,
+.est-close .icon,
+.remove-btn .icon,
+.tool-popup-btn .icon{margin-left:0;}
+/* Slightly larger icons in tool popup buttons */
+.tool-popup-btn .icon{width:20px;height:20px;}
+/* Panel header icons */
+.panel-header .icon{width:15px;height:15px;opacity:.85;}
+
+/* Forzar color de trazo en todos los hijos del SVG */
+.icon path,
+.icon circle,
+.icon rect,
+.icon polygon,
+.icon polyline,
+.icon line {
+  stroke: currentColor !important;
+  fill: none !important;
+}
+/* Card icons in landing cards */
+.card-icon {
+  color: var(--gold-bright);
+}
+.card-icon .icon{width:28px;height:28px;display:block;}

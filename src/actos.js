@@ -4,6 +4,7 @@ import { state } from './state.js';
 import { _editSessionId } from './views.js';
 import { saveState } from './persist.js';
 import { openModal, closeModal, showConfirm, showToast } from './ui.js';
+import { ICONS } from './icons.js';
 
 export let editingActoId     = null;
 export let _editingActoImage = null;

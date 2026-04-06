@@ -3,6 +3,7 @@ import { uid } from './utils.js';
 import { state } from './state.js';
 import { saveState } from './persist.js';
 import { showConfirm, showToast } from './ui.js';
+import { ICONS } from './icons.js';
 
 export function renderEstadoList() {
   const list = document.getElementById('estado-list');
@@ -20,7 +21,7 @@ export function renderEstadoList() {
         <span class="entity-name">${e.nombre}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-danger btn-sm" onclick="window._g.deleteEstado('${e.id}')">✕ Borrar</button>
+        <button class="btn btn-danger btn-sm" onclick="window._g.deleteEstado('${e.id}')">${ICONS.x} Borrar</button>
       </div>`;
     list.appendChild(card);
   });

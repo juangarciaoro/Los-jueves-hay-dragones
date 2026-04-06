@@ -8,6 +8,7 @@ import { renderActoList } from './actos.js';
 import { renderEventoList } from './eventos.js';
 import { switchView, updateBreadcrumbs, _editSessionId, setEditSessionId } from './views.js';
 import { renderCombatantChips } from './combat.js';
+import { ICONS } from './icons.js';
 
 const EDIT_CAT_COLORS = { 'Tensión':'#c86e1e','Combate':'#a02020','Social':'#3ca050','Entorno':'#3a7ab8' };
 const EDIT_CAT_BG     = { 'Tensión':'rgba(200,110,30,0.15)','Combate':'rgba(160,32,32,0.15)','Social':'rgba(60,160,80,0.15)','Entorno':'rgba(58,122,184,0.15)' };
@@ -55,13 +56,13 @@ export function renderSessionList() {
     const published = !!session.published;
     card.className  = 'entity-card ' + (published ? 'session-card--published' : 'session-card--unpublished');
     const pubBtn    = published
-      ? `<button class="btn btn-sm btn-published"   onclick="toggleSessionPublished('${session.id}')">🌐 Publicada</button>`
-      : `<button class="btn btn-sm btn-unpublished" onclick="toggleSessionPublished('${session.id}')">🔒 No publicada</button>`;
+      ? `<button class="btn btn-sm btn-published"   onclick="toggleSessionPublished('${session.id}')">${ICONS.globe} Publicada</button>`
+      : `<button class="btn btn-sm btn-unpublished" onclick="toggleSessionPublished('${session.id}')">${ICONS.lock} No publicada</button>`;
     const actions   = dm
       ? `${pubBtn}
-         <button class="btn btn-outline btn-sm" onclick="openSessionEdit('${session.id}')">✎ Preparar</button>
+         <button class="btn btn-outline btn-sm" onclick="openSessionEdit('${session.id}')">${ICONS.pencil} Preparar</button>
          <button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>
-         <button class="btn btn-danger btn-sm"  onclick="deleteSession('${session.id}')">✕ Borrar</button>`
+         <button class="btn btn-danger btn-sm"  onclick="deleteSession('${session.id}')">${ICONS.x} Borrar</button>`
       : `<button class="btn btn-outline btn-sm" onclick="switchView('${session.id}')">Abrir</button>`;
     const actosCount   = state.actos.filter(a => a.sessionId === session.id).length;
     const eventosCount = state.eventos.filter(e => e.sessionId === session.id).length;
@@ -126,7 +127,7 @@ export function openPrepareCombatsModal(sessionId) {
   _prepareCombatsSessionId = sessionId;
   _prepareCombatsSelected  = new Set(session.allowedEnemies || []);
   const title = document.getElementById('modal-prepare-combats-title');
-  if (title) title.textContent = `⚔ Preparar Combates — ${session.name}`;
+  if (title) title.innerHTML = `${ICONS.swords} Preparar Combates — ${session.name}`;
   const wrap  = document.getElementById('prepare-combats-chips');
   const empty = document.getElementById('prepare-combats-empty');
   wrap.innerHTML = '';
@@ -196,12 +197,12 @@ export function renderSessionEditView() {
     const isLast   = actos.indexOf(acto) === actos.length - 1;
     const actoHeader = document.createElement('div'); actoHeader.className = 'se-acto-header';
     actoHeader.innerHTML = `
-      <span class="se-acto-title">📜 ${acto.title}</span>
+      <span class="se-acto-title">${ICONS.scroll} ${acto.title}</span>
       <span style="font-family:'Crimson Text',serif;font-size:.82rem;color:var(--text-muted)">${eventos.length} evento${eventos.length!==1?'s':''}</span>
       <button class="btn btn-outline btn-xs" ${isFirst?'disabled':''} onclick="moveActo('${acto.id}',-1)">▲</button>
       <button class="btn btn-outline btn-xs" ${isLast?'disabled':''} onclick="moveActo('${acto.id}',1)">▼</button>
-      <button class="btn btn-outline btn-sm" onclick="openActoModal('${acto.id}','${session.id}')">✎ Editar</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">✕ Borrar</button>`;
+      <button class="btn btn-outline btn-sm" onclick="openActoModal('${acto.id}','${session.id}')">${ICONS.pencil} Editar</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteActo('${acto.id}')">${ICONS.x} Borrar</button>`;
     block.appendChild(actoHeader);
 
     const evList = document.createElement('div'); evList.className = 'se-events-list';
@@ -213,8 +214,8 @@ export function renderSessionEditView() {
       row.innerHTML = `
         <span class="se-event-cat" style="color:${color};background:${bg}">${ev.categoria}</span>
         <span class="se-event-title">${ev.title}</span>
-        <button class="btn btn-outline btn-sm" onclick="openEventoModal('${ev.id}','${session.id}','${acto.id}')">✎</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteEvento('${ev.id}')">✕</button>`;
+        <button class="btn btn-outline btn-sm" onclick="openEventoModal('${ev.id}','${session.id}','${acto.id}')">${ICONS.pencil}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEvento('${ev.id}')">${ICONS.x}</button>`;
       evList.appendChild(row);
     });
     block.appendChild(evList);
@@ -230,7 +231,7 @@ export function renderSessionEditView() {
 
   const allowedSet = new Set(session.allowedEnemies || []);
   const enemiesSection = document.createElement('div'); enemiesSection.className = 'se-enemies-section';
-  const eTitle = document.createElement('div'); eTitle.className = 'se-enemies-title'; eTitle.textContent = '⚔ Enemigos de la sesión';
+  const eTitle = document.createElement('div'); eTitle.className = 'se-enemies-title'; eTitle.innerHTML = ICONS.swords + ' Enemigos de la sesión';
   enemiesSection.appendChild(eTitle);
   const eChips = document.createElement('div'); eChips.className = 'se-enemies-chips';
   if (!state.enemies.length) {

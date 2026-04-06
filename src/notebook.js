@@ -1,6 +1,7 @@
 // notebook.js — Player pause menu: bestiary + inventory panels
 import { state, getPlayerData } from './state.js';
 import { saveState } from './persist.js';
+import { ICONS } from './icons.js';
 
 // ===========================
 //  BESTIARY
@@ -43,7 +44,7 @@ export function renderBestiaryList(container, userId, filter) {
       const row    = document.createElement('div');
       row.className = 'bestiary-row' + (known ? ' known' : ' unknown');
       const icon   = document.createElement('span');
-      icon.className = 'bestiary-icon'; icon.textContent = known ? '📖' : '❓';
+      icon.className = 'bestiary-icon'; icon.innerHTML = known ? ICONS.bookOpen : ICONS.circleHelp;
       const nameEl = document.createElement('span');
       nameEl.className = 'bestiary-name'; nameEl.textContent = displayName;
       row.appendChild(icon); row.appendChild(nameEl);
@@ -52,7 +53,7 @@ export function renderBestiaryList(container, userId, filter) {
         const hasNotes = !!(pd.bestiary[enemy.id]);
         if (hasNotes) {
           const badge = document.createElement('span');
-          badge.className = 'bestiary-notes-badge'; badge.textContent = '✎'; badge.title = 'Tiene notas';
+          badge.className = 'bestiary-notes-badge'; badge.innerHTML = ICONS.pencil; badge.title = 'Tiene notas';
           row.appendChild(badge);
         }
         row.addEventListener('click', () => openBestiaryDetail(container, enemy, userId));

@@ -3,6 +3,7 @@ import { uid } from './utils.js';
 import { state, isDM } from './state.js';
 import { saveState } from './persist.js';
 import { openModal, closeModal, showConfirm, showToast } from './ui.js';
+import { ICONS } from './icons.js';
 import { refreshCombatantSelects } from './characters.js';
 
 export let editingEnemyId       = null;
@@ -57,7 +58,7 @@ export function renderEnemyList() {
   state.enemies.forEach(e => {
     const card    = document.createElement('div'); card.className = 'entity-card';
     const actions = isDM()
-      ? `<button class="btn btn-outline btn-sm" onclick="window._g.openEnemyModal('${e.id}')">✎ Editar</button><button class="btn btn-outline btn-sm" onclick="window._g.cloneEnemy('${e.id}')" title="Clonar">⧉ Clonar</button><button class="btn btn-danger btn-sm" onclick="window._g.deleteEnemy('${e.id}')">✕ Borrar</button>`
+      ? `<button class="btn btn-outline btn-sm" onclick="window._g.openEnemyModal('${e.id}')">${ICONS.pencil} Editar</button><button class="btn btn-outline btn-sm" onclick="window._g.cloneEnemy('${e.id}')" title="Clonar">${ICONS.copy} Clonar</button><button class="btn btn-danger btn-sm" onclick="window._g.deleteEnemy('${e.id}')">${ICONS.x} Borrar</button>`
       : '';
     card.innerHTML = `
       <div class="entity-card-info">

@@ -41,9 +41,15 @@ import { filterList } from './utils.js';
     return;
   }
 
-  await ensureCampaignCatalog();
-  await ensureGlobalUsers();
-  await migrateLegacyUsersToGlobal();
+  try {
+    await ensureCampaignCatalog();
+    await ensureGlobalUsers();
+    await migrateLegacyUsersToGlobal();
+  } catch (e) {
+    console.error('Error al conectar con la base de datos:', e);
+    const errEl = document.getElementById('login-error');
+    if (errEl) errEl.textContent = 'Error de conexión. Comprueba tu red e intenta de nuevo.';
+  }
   renderCampaignSelect();
   applyDeskSubtitle();
 

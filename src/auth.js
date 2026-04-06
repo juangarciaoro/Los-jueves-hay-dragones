@@ -1,5 +1,6 @@
 // auth.js — Login, logout, role UI, player preview toggle
 import { hashPassword } from './utils.js';
+import { ICONS } from './icons.js';
 import {
   state, currentUser, setCurrentUser, globalUsers, _playerPreview, setPlayerPreview,
   _unsubscribe, setUnsubscribe, _usersUnsubscribe, setUsersUnsubscribe,
@@ -125,8 +126,8 @@ export function applyRoleUI() {
   const badge = document.getElementById('user-badge');
   if (badge) badge.innerHTML = realDM
     ? (_playerPreview
-        ? `<span class="role-player">👁 Vista Jugador</span>`
-        : `<span class="role-dm">⚔ DM</span> &nbsp;${currentUser.username}`)
+        ? `<span class="role-player">${ICONS.eye} Vista Jugador</span>`
+        : `<span class="role-dm">${ICONS.swords} DM</span> &nbsp;${currentUser.username}`)
     : `${currentUser.username} &nbsp;<span class="role-player">Jugador</span>`;
 
   document.querySelectorAll('.dm-only-ctrl').forEach(el => { el.style.display = dm ? '' : 'none'; });
