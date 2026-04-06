@@ -3,7 +3,6 @@ import { uid } from './utils.js';
 import { state } from './state.js';
 import { _editSessionId } from './views.js';
 import { saveState } from './persist.js';
-import { ICONS } from './icons.js';
 import { openModal, closeModal, showConfirm, showToast } from './ui.js';
 
 export let editingEventoId = null;
@@ -53,8 +52,8 @@ export function renderEventoList() {
             <span class="evento-cat-badge" style="color:${color}">${e.categoria}</span>
           </div>
           <div class="entity-actions">
-            <button class="btn btn-outline btn-sm" onclick="window._g.openEventoModal('${e.id}')">${ICONS.pencil} Editar</button>
-            <button class="btn btn-danger btn-sm"  onclick="window._g.deleteEvento('${e.id}')">${ICONS.x} Borrar</button>
+            <button class="btn btn-outline btn-sm" onclick="window._g.openEventoModal('${e.id}')">✎ Editar</button>
+            <button class="btn btn-danger btn-sm"  onclick="window._g.deleteEvento('${e.id}')">✕ Borrar</button>
           </div>`;
         actoChildren.appendChild(row);
       });

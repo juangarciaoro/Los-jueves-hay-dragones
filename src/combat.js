@@ -3,7 +3,6 @@ import { uid } from './utils.js';
 import { state, isDM, currentUser } from './state.js';
 import { saveState } from './persist.js';
 import { openModal, closeModal } from './ui.js';
-import { ICONS } from './icons.js';
 
 // ===== COMBATANT CHIPS (quick-add buttons) =====
 export function renderCombatantChips(clone, session) {
@@ -88,11 +87,11 @@ export function renderCombatantList(session, clone) {
       </div>
       <div class="conditions-wrap"></div>
       <div class="dead-btns-corner ${dm?'':'player-hide'}">
-        <button class="dead-btn">${c.dead?ICONS.refreshCcw:ICONS.skull}</button>
-        <button class="dead-btn" style="border-color:var(--ink-faded);color:var(--ink-faded)">${ICONS.x}</button>
+        <button class="dead-btn">${c.dead?'♻':'☠'}</button>
+        <button class="dead-btn" style="border-color:var(--ink-faded);color:var(--ink-faded)">✕</button>
       </div>
       ${dm && c.type==='enemy' && c.enemyId ? '<button class="enemy-info-btn" title="Ver ficha del enemigo">ⓘ</button>' : ''}
-      ${!dm && c.type==='enemy' && c.enemyId && state.encounteredEnemies.includes(c.enemyId) ? `<button class="player-enemy-info-btn" title="Ver en bestiario">${ICONS.bookOpen}</button>` : ''}`;
+      ${!dm && c.type==='enemy' && c.enemyId && state.encounteredEnemies.includes(c.enemyId) ? '<button class="player-enemy-info-btn" title="Ver en bestiario">📖</button>' : ''}`;
 
     // Player bestiary shortcut
     if (!dm && c.type==='enemy' && c.enemyId && state.encounteredEnemies.includes(c.enemyId)) {
@@ -137,8 +136,7 @@ export function renderCombatantList(session, clone) {
     const condWrap = card.querySelector('.conditions-wrap');
     c.conditions.forEach((cond, ci) => {
       const tag = document.createElement('span'); tag.className = 'condition-tag';
-      tag.textContent = cond + (canControl ? ' ' : '');
-      if (canControl) tag.insertAdjacentHTML('beforeend', ICONS.x);
+      tag.textContent = cond + (canControl ? ' ✕' : '');
       if (canControl) tag.onclick = () => { c.conditions.splice(ci,1); saveState(); renderCombatantList(session, clone); };
       condWrap.appendChild(tag);
     });

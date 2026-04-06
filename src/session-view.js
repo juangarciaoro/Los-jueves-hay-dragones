@@ -3,7 +3,6 @@ import { state, isDM, currentUser, getPlayerData } from './state.js';
 import { saveState } from './persist.js';
 import { renderCombatantChips, renderCombatantList, addCombatantToSession } from './combat.js';
 import { renderBestiaryList, renderInventoryPanel } from './notebook.js';
-import { ICONS } from './icons.js';
 
 // openSpectatorWindow imported lazily to avoid circular deps
 function openSpectatorWindow(sid) {
@@ -94,10 +93,10 @@ export function buildSessionView(session) {
   const diceBtn    = clone.querySelector('.btn-popup-dice');
   const dicePopup  = clone.querySelector('.popup-dice');
 
-  notesBtn.innerHTML = dm ? ICONS.notebook : ICONS.bookOpen;
+  notesBtn.textContent = dm ? '🗒' : '📖';
   notesBtn.title       = dm ? 'Notas del DM' : 'Cuaderno';
   const notesPopupTitle = clone.querySelector('.popup-notes-title');
-  if (notesPopupTitle) notesPopupTitle.innerHTML = dm ? `${ICONS.notebook} Notas del DM` : `${ICONS.bookOpen} Cuaderno del Aventurero`;
+  if (notesPopupTitle) notesPopupTitle.textContent = dm ? '🗒 Notas del DM' : '📖 Cuaderno del Aventurero';
 
   function openPopup(popup, btn)  { popup.style.display = 'flex'; btn.classList.add('active'); }
   function closePopup(popup, btn) { popup.style.display = 'none'; btn.classList.remove('active'); }
@@ -280,7 +279,7 @@ export function renderSessionActos(session, clone) {
     pubLabel.className = 'flabel'; pubLabel.style.margin = '0';
     pubLabel.textContent = 'Contenido Público';
     const pubBtn = document.createElement('button');
-    pubBtn.className = 'btn btn-outline btn-sm'; pubBtn.innerHTML = `${ICONS.megaphone} Publicar`;
+    pubBtn.className = 'btn btn-outline btn-sm'; pubBtn.textContent = '📢 Publicar';
     pubBtn.addEventListener('click', () => {
       const text = acto.public || '';
       if (!text) return;
@@ -312,12 +311,12 @@ export function renderSessionActos(session, clone) {
       imgRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;';
       const imgLabel = document.createElement('label');
       imgLabel.className = 'flabel'; imgLabel.style.margin = '0';
-      imgLabel.textContent = 'Imagen'; imgLabel.insertAdjacentHTML('afterbegin', ICONS.image + ' ');
+      imgLabel.textContent = '🖼️ Imagen';
       imgRow.appendChild(imgLabel);
       if (isDM()) {
         const imgPubBtn = document.createElement('button');
         imgPubBtn.className = 'btn btn-outline btn-sm';
-        imgPubBtn.innerHTML = `${ICONS.camera} Publicar imagen`;
+        imgPubBtn.textContent = '📷 Publicar imagen';
         imgPubBtn.addEventListener('click', () => publishActoImage(session, acto, clone));
         imgRow.appendChild(imgPubBtn);
       }
@@ -362,7 +361,7 @@ export function renderRollHistory(session, el) {
     if (e.isDMroll && !dm) return;
     if (e.secret && !dm && e.user !== currentUser?.username) return;
     const d = document.createElement('div'); d.className = 'roll-entry';
-    const badge = e.secret ? ` <span class="roll-badge secret">${ICONS.lock}</span>` : (e.isDMroll ? ` <span class="roll-badge dm">${ICONS.crown}</span>` : '');
+    const badge = e.secret ? ' <span class="roll-badge secret">🔒</span>' : (e.isDMroll ? ' <span class="roll-badge dm">🎭</span>' : '');
     d.innerHTML = `<span><span class="ru">${e.user||'?'}</span>${badge}<span class="rl">${e.label}</span></span><span class="rv">${e.rolls.length>1?'['+e.rolls.join(',')+'] = ':''}${e.total}</span>`;
     el.appendChild(d);
   });
@@ -407,7 +406,7 @@ export function renderSessionGallery(session, clone) {
     if (isDM()) {
       const removeBtn = document.createElement('button');
       removeBtn.className = 'btn btn-danger btn-xs diary-gallery-remove';
-      removeBtn.innerHTML = ICONS.x; removeBtn.title = 'Retirar del diario';
+      removeBtn.textContent = '✕'; removeBtn.title = 'Retirar del diario';
       removeBtn.addEventListener('click', e => {
         e.stopPropagation();
         session.publishedImages = session.publishedImages.filter(i => i.id !== entry.id);

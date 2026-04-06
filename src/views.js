@@ -1,6 +1,5 @@
 // views.js — Navigation, landing, maint landing, active sessions
 import { state, globalUsers, campaigns, currentUser, isDM, currentCampaignId } from './state.js';
-import { ICONS } from './icons.js';
 
 // exported mutable for session-edit view
 export let _editSessionId = null;
@@ -12,19 +11,19 @@ export function updateBreadcrumbs(viewId) {
   if (!current) return;
   let label = '—', show = false;
   if (viewId === 'maint') {
-    label = isDM() ? `${ICONS.settings} Mantenimiento` : `${ICONS.scroll} Hoja de Usuario`; show = true;
+    label = isDM() ? '⚙ Mantenimiento' : '📜 Hoja de Usuario'; show = true;
   } else if (viewId === 'sessions-list') {
-    label = `${ICONS.bookOpen} Sesiones`; show = true;
+    label = '📖 Sesiones'; show = true;
   } else if (viewId === 'session-edit') {
     const s = state.sessions.find(x => x.id === _editSessionId);
-    label = s ? `${ICONS.pencil} ${s.name}` : `${ICONS.pencil} Preparar sesión`; show = true;
+    label = s ? `✎ ${s.name}` : '✎ Preparar sesión'; show = true;
   } else if (viewId === 'charsheet') {
-    label = `${ICONS.scroll} Hoja de Personaje`; show = true;
+    label = '📜 Hoja de Personaje'; show = true;
   } else {
     const session = state.sessions.find(s => s.id === viewId);
     if (session) { label = session.name; show = true; }
   }
-  current.innerHTML = label;
+  current.textContent = label;
   separator.style.display = show ? '' : 'none';
   current.style.display   = show ? '' : 'none';
 }
@@ -71,19 +70,13 @@ export function switchMaintSection(name, btn) {
   const sec = document.getElementById('maint-' + name);
   if (sec) sec.classList.add('active');
   const sectionNames = {
-    personajes: `${ICONS.user} Personajes`,
-    sesiones:   `${ICONS.scroll} Sesiones`,
-    enemigos:   `${ICONS.skull} Tipos de Enemigos`,
-    usuarios:   `${ICONS.users} Usuarios`,
-    campanas:   `${ICONS.castle} Campañas`,
-    estados:    `${ICONS.zap} Estados`,
-    actos:      `${ICONS.sword} Actos`,
-    eventos:    `${ICONS.dices} Eventos Aleatorios`,
-    backup:     `${ICONS.save} Copia de Seguridad`
+    personajes:'👤 Personajes', sesiones:'📜 Sesiones', enemigos:'👹 Tipos de Enemigos',
+    usuarios:'👥 Usuarios', campanas:'🗺 Campañas', estados:'⚡ Estados',
+    actos:'🗡️ Actos', eventos:'🎲 Eventos Aleatorios', backup:'💾 Copia de Seguridad'
   };
   const current   = document.getElementById('breadcrumb-current');
   const separator = document.getElementById('breadcrumb-separator');
-  if (current) { current.innerHTML = sectionNames[name] || name; separator.style.display = ''; current.style.display = ''; }
+  if (current) { current.textContent = sectionNames[name] || name; separator.style.display = ''; current.style.display = ''; }
 }
 
 export function renderMaintLanding() {
@@ -91,15 +84,15 @@ export function renderMaintLanding() {
   if (!container) return;
   container.innerHTML = '';
   const sections = [
-    {id:'sesiones',   name:'Sesiones',           icon:ICONS.scroll,    dmOnly:true},
-    {id:'actos',      name:'Actos',               icon:ICONS.sword,     dmOnly:true},
-    {id:'eventos',    name:'Eventos Aleatorios',  icon:ICONS.dices,     dmOnly:true},
-    {id:'enemigos',   name:'Tipos de Enemigos',   icon:ICONS.skull,     alwaysShow:true},
-    {id:'estados',    name:'Estados',             icon:ICONS.zap,       dmOnly:true},
-    {id:'personajes', name:'Personajes',          icon:ICONS.swords,    alwaysShow:true},
-    {id:'usuarios',   name:'Usuarios',            icon:ICONS.shield,    dmOnly:true},
-    {id:'campanas',   name:'Campañas',            icon:ICONS.castle,    dmOnly:true},
-    {id:'backup',     name:'Copia de Seguridad',  icon:ICONS.keyRound,  dmOnly:true}
+    {id:'sesiones',   name:'Sesiones',           icon:'📜', dmOnly:true},
+    {id:'actos',      name:'Actos',               icon:'🗡️', dmOnly:true},
+    {id:'eventos',    name:'Eventos Aleatorios',  icon:'🎲', dmOnly:true},
+    {id:'enemigos',   name:'Tipos de Enemigos',   icon:'💀', alwaysShow:true},
+    {id:'estados',    name:'Estados',             icon:'🔮', dmOnly:true},
+    {id:'personajes', name:'Personajes',          icon:'⚔️', alwaysShow:true},
+    {id:'usuarios',   name:'Usuarios',            icon:'🛡️', dmOnly:true},
+    {id:'campanas',   name:'Campañas',            icon:'🏰', dmOnly:true},
+    {id:'backup',     name:'Copia de Seguridad',  icon:'🗝️', dmOnly:true}
   ];
   const counts = {
     personajes: state.chars.length,    sesiones: state.sessions.length,
@@ -134,16 +127,16 @@ export function renderLandingPage() {
   const btn1 = document.createElement('button');
   btn1.className = 'landing-card';
   if (dm) {
-    btn1.innerHTML = `<span class="card-icon">${ICONS.hammer}</span><span class="card-label">Mantenimiento</span>`;
+    btn1.innerHTML = '<span class="card-icon">⚒️</span><span class="card-label">Mantenimiento</span>';
     btn1.onclick = () => switchView('maint');
   } else {
-    btn1.innerHTML = `<span class="card-icon">${ICONS.scroll}</span><span class="card-label">Hoja de Usuario</span>`;
+    btn1.innerHTML = '<span class="card-icon">📜</span><span class="card-label">Hoja de Usuario</span>';
     btn1.onclick = () => switchView('charsheet');
   }
   container.appendChild(btn1);
   const btn2 = document.createElement('button');
   btn2.className = 'landing-card';
-  btn2.innerHTML = `<span class="card-icon">${ICONS.bookOpen}</span><span class="card-label">Sesiones</span>`;
+  btn2.innerHTML = '<span class="card-icon">📖</span><span class="card-label">Sesiones</span>';
   btn2.onclick = () => switchView('sessions-list');
   container.appendChild(btn2);
 }

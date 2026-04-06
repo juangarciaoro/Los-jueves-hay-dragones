@@ -1,5 +1,4 @@
 // ui.js — DOM helpers: modal, toast, confirm dialog, loading overlay, save indicator
-import { ICONS } from './icons.js';
 
 // ===== MODAL =====
 export function openModal(id) {
@@ -20,7 +19,7 @@ export function setSaveIndicator(status) {
   if (status === 'saving') {
     el.textContent = 'Guardando…'; el.className = 'save-indicator saving';
   } else if (status === 'saved') {
-    el.innerHTML = ICONS.check + ' Guardado'; el.className = 'save-indicator saved';
+    el.textContent = '✓ Guardado'; el.className = 'save-indicator saved';
     el._hideTimeout = setTimeout(() => { el.textContent = ''; el.className = 'save-indicator'; }, 2000);
   } else {
     el.textContent = ''; el.className = 'save-indicator';

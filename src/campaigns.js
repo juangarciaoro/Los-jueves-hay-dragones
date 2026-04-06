@@ -3,7 +3,6 @@ import { getUniqueCampaignId } from './utils.js';
 import { db, doc, setDoc, CAMPAIGNS_INDEX_DOC } from './firebase.js';
 import { campaigns, currentCampaignId, currentUser, isDM } from './state.js';
 import { showToast, openModal, closeModal } from './ui.js';
-import { ICONS } from './icons.js';
 
 export function getCurrentCampaignName() {
   const c = campaigns.find(x => x.id === currentCampaignId);
@@ -54,13 +53,8 @@ export function renderCampaignSelect() {
   if (!available.length) {
     const o = document.createElement('option');
     o.value = ''; o.textContent = 'No hay campañas activas'; sel.appendChild(o);
-    sel.disabled = true;
-    const hint = document.getElementById('login-no-campaigns-hint');
-    if (hint) hint.style.display = '';
-    applyCampaignBranding(); return;
+    sel.disabled = true; applyCampaignBranding(); return;
   }
-  const hint = document.getElementById('login-no-campaigns-hint');
-  if (hint) hint.style.display = 'none';
   sel.disabled = false;
   available.forEach(c => {
     const o = document.createElement('option');
@@ -90,11 +84,11 @@ export function renderCampaignList() {
     card.innerHTML = `
       <div class="entity-card-info">
         <span class="entity-name">${c.name}${isActive ? ' <span style="color:var(--gold-light);font-size:.7rem">(activa)</span>':''}</span>
-        <span class="entity-meta">${c.archived ? `${ICONS.archive} Archivada` : `${ICONS.map} Activa`}</span>
+        <span class="entity-meta">${c.archived ? '🗄 Archivada' : '🗺 Activa'}</span>
       </div>
       <div class="entity-actions">
         ${!isActive ? `<button class="btn btn-outline btn-sm" onclick="switchToCampaign('${c.id}')">Cambiar</button>` : ''}
-        <button class="btn btn-outline btn-sm" onclick="openCampaignModal('${c.id}')">${ICONS.pencil} Editar</button>
+        <button class="btn btn-outline btn-sm" onclick="openCampaignModal('${c.id}')">✎ Editar</button>
         <button class="btn btn-outline btn-sm" onclick="toggleCampaignArchived('${c.id}')">${c.archived?'Restaurar':'Archivar'}</button>
       </div>`;
     list.appendChild(card);
@@ -105,12 +99,12 @@ export function openCampaignModal(id) {
   editingCampaignId = id || null;
   const c = id ? campaigns.find(x => x.id === id) : null;
   document.getElementById('modal-campaign-title').textContent = id ? 'Editar Campaña' : 'Nueva Campaña';
-  document.getElementById('camp-name').value = c?.name || '';
+  document.getElementById('cf-name').value = c?.name || '';
   openModal('modal-campaign');
 }
 
 export async function saveCampaign() {
-  const name = document.getElementById('camp-name').value.trim();
+  const name = document.getElementById('cf-name').value.trim();
   if (!name) { showToast('El nombre es obligatorio', 'error'); return; }
   if (editingCampaignId) {
     const c = campaigns.find(x => x.id === editingCampaignId);

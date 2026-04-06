@@ -2,7 +2,6 @@
 import { uid, hashPassword } from './utils.js';
 import { state, globalUsers, setGlobalUsers, currentUser } from './state.js';
 import { showToast, showConfirm, openModal, closeModal } from './ui.js';
-import { ICONS } from './icons.js';
 // NOTE: saveGlobalUsers is imported from persist.js at function-call time via dynamic import
 // to avoid a circular dependency (persist.js imports sanitizeUsers from this module).
 
@@ -98,11 +97,11 @@ export function renderUserList() {
     card.innerHTML = `
       <div class="entity-card-info">
         <span class="entity-name">${u.username}</span>
-        <span class="entity-meta">${u.isDM ? `${ICONS.swords} DM` : `${ICONS.shield} Jugador`}</span>
+        <span class="entity-meta">${u.isDM ? '⚔ DM' : '🛡 Jugador'}</span>
       </div>
       <div class="entity-actions">
-        <button class="btn btn-outline btn-sm" onclick="openUserModal('${u.id}')">${ICONS.pencil} Editar</button>
-        <button class="btn btn-danger btn-sm" ${u.id === currentUser?.id ? 'disabled title="No puedes eliminarte a ti mismo"' : `onclick="deleteUser('${u.id}')"`}>${ICONS.x} Borrar</button>
+        <button class="btn btn-outline btn-sm" onclick="openUserModal('${u.id}')">✎ Editar</button>
+        <button class="btn btn-danger btn-sm" ${u.id === currentUser?.id ? 'disabled title="No puedes eliminarte a ti mismo"' : `onclick="deleteUser('${u.id}')"`}>✕ Borrar</button>
       </div>`;
     list.appendChild(card);
   });
