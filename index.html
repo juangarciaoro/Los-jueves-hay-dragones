@@ -322,7 +322,7 @@
         <div class="player-notes-panel-wrap" style="display:none">
           <div class="player-notebook">
             <div class="player-notebook-menu is-active" data-notebook-menu>
-              <div class="player-notebook-tabs" aria-label="Cuaderno de personaje">
+              <div class="player-notebook-tabs" data-notebook-tabs aria-label="Cuaderno de personaje">
                 <button type="button" class="player-notebook-tab" data-notebook-open="bestiary">
                   <span data-ui-icon="mask"></span> Bestiario
                 </button>
@@ -332,10 +332,18 @@
                 <button type="button" class="player-notebook-tab" data-notebook-open="notes">
                   <span data-ui-icon="book"></span> Cuaderno de notas
                 </button>
+                <button type="button" class="player-notebook-tab player-notebook-tab-add" data-notebook-add-section>
+                  <span data-ui-icon="plus"></span> Añadir sección
+                </button>
               </div>
             </div>
 
             <div class="player-notebook-panel" data-notebook-panel="bestiary">
+              <div class="player-notebook-panel-head">
+                <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-notebook-back>
+                  <span data-ui-icon="back"></span> Volver al menu
+                </button>
+              </div>
               <div class="player-notebook-panel-body">
                 <input type="search" class="form-input bestiary-search-input" placeholder="Buscar enemigo conocido..." data-bestiary-search>
                 <div class="bestiary-layout" data-bestiary-layout>
@@ -348,32 +356,52 @@
                   </div>
                 </div>
               </div>
-              <div class="player-notebook-panel-head">
-                <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-notebook-back>
-                  <span data-ui-icon="back"></span> Volver al menu
-                </button>
-              </div>
             </div>
 
             <div class="player-notebook-panel" data-notebook-panel="inventory">
-              <div class="player-notebook-panel-body">
-                <div class="inventory-grid" data-inventory-grid></div>
-              </div>
               <div class="player-notebook-panel-head">
                 <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-notebook-back>
                   <span data-ui-icon="back"></span> Volver al menu
                 </button>
+              </div>
+              <div class="player-notebook-panel-body">
+                <div class="inventory-grid" data-inventory-grid></div>
               </div>
             </div>
 
             <div class="player-notebook-panel" data-notebook-panel="notes">
-              <div class="player-notebook-panel-body">
-                <textarea class="note-area player-notebook-notes" style="min-height:220px" placeholder="Tus notas personales… solo tú las ves." data-field="player_notebook_notes"></textarea>
-              </div>
               <div class="player-notebook-panel-head">
                 <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-notebook-back>
                   <span data-ui-icon="back"></span> Volver al menu
                 </button>
+              </div>
+              <div class="player-notebook-panel-body">
+                <textarea class="note-area player-notebook-notes" style="min-height:220px" placeholder="Tus notas personales… solo tú las ves." data-field="player_notebook_notes"></textarea>
+              </div>
+            </div>
+
+            <div class="player-notebook-panel" data-notebook-panel="custom">
+              <div class="player-notebook-panel-head">
+                <button type="button" class="btn btn-outline btn-sm player-notebook-head-btn" data-custom-section-add-entry>
+                  <span data-ui-icon="plus"></span> Añadir entrada
+                </button>
+                <button type="button" class="btn btn-danger btn-sm player-notebook-head-btn" data-custom-section-delete>
+                  <span data-ui-icon="trash"></span> Eliminar sección
+                </button>
+                <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-notebook-back>
+                  <span data-ui-icon="back"></span> Volver al menu
+                </button>
+              </div>
+              <div class="player-notebook-panel-body">
+                <input type="search" class="form-input bestiary-search-input" placeholder="Buscar entrada..." data-custom-section-search>
+                <div class="bestiary-layout custom-section-layout" data-custom-section-layout>
+                  <div>
+                    <div class="bestiary-list custom-section-list" data-custom-section-list></div>
+                  </div>
+                  <div class="bestiary-detail custom-section-detail" data-custom-section-detail>
+                    <div class="bestiary-detail-empty">Crea una entrada para empezar a guardar notas en esta sección.</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -725,6 +753,23 @@
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-campaign')">Cancelar</button>
       <button class="btn btn-gold btn-sm" id="modal-campaign-submit" onclick="saveCampaign()">Crear</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-text-input" class="modal-overlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><span id="modal-text-input-title">Nuevo nombre</span><button class="modal-close" onclick="closeTextInputModal()"><span data-ui-icon="close"></span></button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label class="flabel" id="modal-text-input-label">Nombre</label>
+        <input id="modal-text-input-field" class="input-lg" placeholder="Escribe un nombre">
+      </div>
+      <div id="modal-text-input-error" style="font-family:'Cinzel',serif;font-size:.62rem;color:var(--blood);min-height:16px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeTextInputModal()">Cancelar</button>
+      <button class="btn btn-gold btn-sm" id="modal-text-input-submit">Guardar</button>
     </div>
   </div>
 </div>

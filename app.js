@@ -63,6 +63,7 @@ const LOGIN_NEW_CAMPAIGN_VALUE = '__new_campaign__';
 const LOGIN_PENDING_CAMPAIGN_VALUE = '__pending_new_campaign__';
 let pendingLoginCampaignDraft = null;
 let campaignModalMode = 'maintenance';
+let textInputModalResolver = null;
 
 function emptyState() {
   return { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
@@ -104,21 +105,16 @@ function getPlayerNotebook(userId) {
       notes: typeof raw === 'string' ? raw : '',
       bestiary: {},
       inventory: [],
-      encounteredEnemies: []
+      encounteredEnemies: [],
+      customSections: []
     };
   }
-  const inventory = Array.isArray(raw.inventory) ? raw.inventory : [];
   return {
     notes: raw.notes || '',
     bestiary: raw.bestiary || {},
-    inventory: inventory
-      .map(item => ({
-        name: (item?.name || '').trim(),
-        qty: Math.max(1, Math.min(10, parseInt(item?.qty) || 1))
-      }))
-      .filter(item => item.name)
-      .slice(0, 10),
-    encounteredEnemies: Array.isArray(raw.encounteredEnemies) ? raw.encounteredEnemies.filter(Boolean) : []
+    inventory: normalizeNotebookInventory(raw.inventory),
+    encounteredEnemies: Array.isArray(raw.encounteredEnemies) ? raw.encounteredEnemies.filter(Boolean) : [],
+    customSections: normalizeNotebookSections(raw.customSections)
   };
 }
 
@@ -126,8 +122,9 @@ function setPlayerNotebook(userId, notebook) {
   state.playerNotes[userId] = {
     notes: notebook.notes || '',
     bestiary: notebook.bestiary || {},
-    inventory: Array.isArray(notebook.inventory) ? notebook.inventory.filter(item => item?.name).slice(0, 10) : [],
-    encounteredEnemies: Array.isArray(notebook.encounteredEnemies) ? [...new Set(notebook.encounteredEnemies)] : []
+    inventory: normalizeNotebookInventory(notebook.inventory),
+    encounteredEnemies: Array.isArray(notebook.encounteredEnemies) ? [...new Set(notebook.encounteredEnemies)] : [],
+    customSections: normalizeNotebookSections(notebook.customSections)
   };
 }
 
@@ -163,13 +160,35 @@ function escapeHtml(value) {
 }
 
 function normalizeNotebookInventory(inventory) {
-  return (Array.isArray(inventory) ? inventory : [])
-    .map(item => ({
-      name: (item?.name || '').trim(),
-      qty: Math.max(1, Math.min(10, parseInt(item?.qty) || 1))
+  return Array.from({ length: 10 }, (_, index) => {
+    const item = Array.isArray(inventory) ? inventory[index] : null;
+    const name = (item?.name || '').trim();
+    return {
+      name,
+      qty: name ? Math.max(1, Math.min(10, parseInt(item?.qty) || 1)) : 1
+    };
+  });
+}
+
+function normalizeNotebookSectionEntries(entries) {
+  return (Array.isArray(entries) ? entries : [])
+    .map(entry => ({
+      id: entry?.id || uid(),
+      name: (entry?.name || '').trim(),
+      notes: entry?.notes || '',
+      sessionName: (entry?.sessionName || '').trim()
     }))
-    .filter(item => item.name)
-    .slice(0, 10);
+    .filter(entry => entry.name);
+}
+
+function normalizeNotebookSections(sections) {
+  return (Array.isArray(sections) ? sections : [])
+    .map(section => ({
+      id: section?.id || uid(),
+      name: (section?.name || '').trim(),
+      entries: normalizeNotebookSectionEntries(section?.entries)
+    }))
+    .filter(section => section.name);
 }
 
 function autosizeTextarea(el) {
@@ -184,16 +203,18 @@ function autosizeTextareaDeferred(el) {
   requestAnimationFrame(() => autosizeTextarea(el));
 }
 
-function renderPlayerNotebook(clone) {
+function renderPlayerNotebook(clone, session) {
   if (!currentUser) return;
 
   const wrap = clone.querySelector('.player-notes-panel-wrap');
   if (!wrap) return;
 
   const menu = clone.querySelector('[data-notebook-menu]');
-  const menuButtons = Array.from(clone.querySelectorAll('[data-notebook-open]'));
+  const tabs = clone.querySelector('[data-notebook-tabs]');
+  const fixedMenuButtons = Array.from(clone.querySelectorAll('[data-notebook-open]'));
   const backButtons = Array.from(clone.querySelectorAll('[data-notebook-back]'));
   const panels = Array.from(clone.querySelectorAll('[data-notebook-panel]'));
+  const addSectionButton = clone.querySelector('[data-notebook-add-section]');
   const notesArea = clone.querySelector('[data-field="player_notebook_notes"]');
   const bestiarySearch = clone.querySelector('[data-bestiary-search]');
   const bestiaryLayout = clone.querySelector('[data-bestiary-layout]');
@@ -201,29 +222,121 @@ function renderPlayerNotebook(clone) {
   const bestiaryPagination = clone.querySelector('[data-bestiary-pagination]');
   const bestiaryDetail = clone.querySelector('[data-bestiary-detail]');
   const inventoryGrid = clone.querySelector('[data-inventory-grid]');
+  const customSectionSearch = clone.querySelector('[data-custom-section-search]');
+  const customSectionLayout = clone.querySelector('[data-custom-section-layout]');
+  const customSectionList = clone.querySelector('[data-custom-section-list]');
+  const customSectionDetail = clone.querySelector('[data-custom-section-detail]');
+  const customSectionAddEntryButton = clone.querySelector('[data-custom-section-add-entry]');
+  const customSectionDeleteButton = clone.querySelector('[data-custom-section-delete]');
+  const notesPopupTitle = clone.querySelector('.popup-notes-title');
   let activeBestiaryEnemyId = null;
   let bestiaryFilter = '';
   let bestiaryPage = 1;
+  let activeCustomSectionId = null;
+  let activeCustomEntryId = null;
+  let customSectionFilter = '';
+  let activeNotebookPanel = null;
   const BESTIARY_PAGE_SIZE = 5;
+  const notebookSessionName = (session?.name || clone.querySelector('[data-session-name]')?.value || '').trim();
 
   function getNotebook() {
     return getPlayerNotebook(currentUser.id);
   }
 
+  function isNotebookMobile() {
+    return window.matchMedia('(max-width: 600px)').matches;
+  }
+
   function saveNotebook(notebook) {
     notebook.inventory = normalizeNotebookInventory(notebook.inventory);
+    notebook.customSections = normalizeNotebookSections(notebook.customSections);
     setPlayerNotebook(currentUser.id, notebook);
     saveState();
   }
 
+  function updateNotebookPopupTitle() {
+    if (!notesPopupTitle) return;
+    let sectionLabel = '';
+    if (activeNotebookPanel === 'bestiary') sectionLabel = 'Bestiario';
+    else if (activeNotebookPanel === 'inventory') sectionLabel = 'Inventario';
+    else if (activeNotebookPanel === 'notes') sectionLabel = 'Cuaderno de notas';
+    else if (activeNotebookPanel === 'custom') sectionLabel = getActiveCustomSection()?.name || '';
+    const suffix = sectionLabel ? ` - ${escapeHtml(sectionLabel)}` : '';
+    notesPopupTitle.innerHTML = `${UI_ICONS.book} Mi Cuaderno${suffix}`;
+  }
+
+  function openNotebookNameModal(config) {
+    openTextInputModal({
+      title: config.title,
+      label: config.label,
+      placeholder: config.placeholder,
+      submitLabel: config.submitLabel,
+      onSubmit: value => {
+        const trimmed = value.trim();
+        if (!trimmed) return 'Introduce un nombre valido';
+        config.onSubmit(trimmed);
+        return null;
+      }
+    });
+  }
+
+  function getActiveCustomSection(notebook = getNotebook()) {
+    return notebook.customSections.find(section => section.id === activeCustomSectionId) || null;
+  }
+
+  function getVisibleCustomEntries(section) {
+    if (!section) return [];
+    return section.entries.filter(entry => !customSectionFilter || entry.name.toLowerCase().includes(customSectionFilter));
+  }
+
+  function renderNotebookMenu() {
+    if (!tabs) return;
+    tabs.querySelectorAll('[data-notebook-open-custom]').forEach(button => button.remove());
+
+    const notebook = getNotebook();
+    const fragment = document.createDocumentFragment();
+    notebook.customSections.forEach(section => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'player-notebook-tab player-notebook-tab-custom';
+      button.dataset.notebookOpenCustom = section.id;
+      button.innerHTML = `${UI_ICONS.book}<span>${escapeHtml(section.name)}</span>`;
+      button.addEventListener('click', () => {
+        openCustomSection(section.id);
+      });
+      fragment.appendChild(button);
+    });
+
+    if (addSectionButton) {
+      tabs.insertBefore(fragment, addSectionButton);
+    } else {
+      tabs.appendChild(fragment);
+    }
+  }
+
   function openNotebookMenu() {
+    renderNotebookMenu();
     if (menu) menu.classList.add('is-active');
     panels.forEach(panel => panel.classList.remove('is-active'));
+    showBestiaryListView();
+    showCustomSectionListView();
+    activeNotebookPanel = null;
+    activeCustomSectionId = null;
+    activeCustomEntryId = null;
+    updateNotebookPopupTitle();
   }
 
   function openNotebookSection(sectionName) {
     if (menu) menu.classList.remove('is-active');
     panels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.notebookPanel === sectionName));
+    if (sectionName === 'bestiary') showBestiaryListView();
+    if (sectionName === 'custom') showCustomSectionListView();
+    activeNotebookPanel = sectionName;
+    if (sectionName !== 'custom') {
+      activeCustomSectionId = null;
+      activeCustomEntryId = null;
+    }
+    updateNotebookPopupTitle();
   }
 
   function openBestiaryEnemy(enemyId) {
@@ -233,7 +346,27 @@ function renderPlayerNotebook(clone) {
     openNotebookSection('bestiary');
     renderBestiaryList();
     renderBestiaryDetail();
+    showBestiaryDetailView();
     return true;
+  }
+
+  function openCustomSection(sectionId) {
+    const notebook = getNotebook();
+    const section = notebook.customSections.find(item => item.id === sectionId);
+    if (!section) {
+      openNotebookMenu();
+      return;
+    }
+
+    activeCustomSectionId = section.id;
+    const visibleEntries = getVisibleCustomEntries(section);
+    if (!section.entries.some(entry => entry.id === activeCustomEntryId)) {
+      activeCustomEntryId = visibleEntries[0]?.id || section.entries[0]?.id || null;
+    }
+    if (customSectionSearch) customSectionSearch.value = customSectionFilter;
+    openNotebookSection('custom');
+    updateNotebookPopupTitle();
+    renderCustomSection();
   }
 
   function showBestiaryListView() {
@@ -244,10 +377,22 @@ function renderPlayerNotebook(clone) {
   }
 
   function showBestiaryDetailView() {
-    if (!bestiaryLayout) return;
+    if (!bestiaryLayout || !isNotebookMobile()) return;
     bestiaryLayout.classList.add('is-detail-view');
     if (bestiarySearch) bestiarySearch.style.display = 'none';
     if (bestiaryPagination) bestiaryPagination.style.display = 'none';
+  }
+
+  function showCustomSectionListView() {
+    if (!customSectionLayout) return;
+    customSectionLayout.classList.remove('is-detail-view');
+    if (customSectionSearch) customSectionSearch.style.display = '';
+  }
+
+  function showCustomSectionDetailView() {
+    if (!customSectionLayout || !isNotebookMobile()) return;
+    customSectionLayout.classList.add('is-detail-view');
+    if (customSectionSearch) customSectionSearch.style.display = 'none';
   }
 
   function renderBestiaryPagination(totalItems) {
@@ -301,30 +446,17 @@ function renderPlayerNotebook(clone) {
       return;
     }
 
-    showBestiaryDetailView();
     bestiaryDetail.innerHTML = `
       <div class="bestiary-detail-card">
-        <button type="button" class="btn btn-outline btn-sm bestiary-back-btn">${withIcon(UI_ICONS.back, 'Volver al listado')}</button>
         <div class="bestiary-detail-title">${escapeHtml(enemy.name)}</div>
-        <div class="bestiary-detail-meta">Tus apuntes privados sobre este enemigo.</div>
         <textarea class="note-area bestiary-note-area" placeholder="Puntos debiles, tacticas, botin, rituales, resistencias..."></textarea>
       </div>
     `;
 
-    const backBtn = bestiaryDetail.querySelector('.bestiary-back-btn');
-    backBtn?.addEventListener('click', () => {
-      activeBestiaryEnemyId = null;
-      showBestiaryListView();
-      renderBestiaryList();
-      renderBestiaryDetail();
-    });
-
     const area = bestiaryDetail.querySelector('.bestiary-note-area');
     if (!area) return;
     area.value = notebook.bestiary?.[enemy.id] || '';
-    autosizeTextareaDeferred(area);
     area.addEventListener('input', () => {
-      autosizeTextarea(area);
       const nextNotebook = getNotebook();
       nextNotebook.bestiary = nextNotebook.bestiary || {};
       nextNotebook.bestiary[enemy.id] = area.value;
@@ -357,7 +489,13 @@ function renderPlayerNotebook(clone) {
 
     if (!filteredEnemies.length) {
       bestiaryList.innerHTML = '<div class="bestiary-empty">No hay resultados para esa busqueda.</div>';
+      activeBestiaryEnemyId = null;
+      renderBestiaryDetail();
       return;
+    }
+
+    if (!filteredEnemies.some(enemy => enemy.id === activeBestiaryEnemyId && enemyEncounteredByUser(currentUser.id, enemy.id))) {
+      activeBestiaryEnemyId = filteredEnemies.find(enemy => enemyEncounteredByUser(currentUser.id, enemy.id))?.id || null;
     }
 
     renderBestiaryPagination(filteredEnemies.length);
@@ -376,27 +514,29 @@ function renderPlayerNotebook(clone) {
       `;
       if (known) {
         button.addEventListener('click', () => {
-          openBestiaryEnemy(enemy.id);
+          activeBestiaryEnemyId = enemy.id;
+          renderBestiaryList();
+          renderBestiaryDetail();
+          showBestiaryDetailView();
         });
       }
       bestiaryList.appendChild(button);
     });
+
+    renderBestiaryDetail();
   }
 
   function renderInventoryGrid() {
     if (!inventoryGrid) return;
 
     const notebook = getNotebook();
-    const slots = Array.from({ length: 10 }, (_, index) => notebook.inventory[index] || { name: '', qty: 1 });
+    const slots = normalizeNotebookInventory(notebook.inventory);
 
     inventoryGrid.innerHTML = '';
     slots.forEach((item, index) => {
       const slot = document.createElement('div');
       slot.className = 'inventory-slot';
       slot.innerHTML = `
-        <div class="inventory-slot-head">
-          <span class="inventory-slot-label">Hueco ${index + 1}</span>
-        </div>
         <input type="text" class="form-input inventory-name-input" placeholder="Objeto" value="${escapeHtml(item.name)}">
         <div class="inventory-qty-row">
           <button type="button" class="inventory-step-btn" data-delta="-1">${UI_ICONS.down}</button>
@@ -411,7 +551,6 @@ function renderPlayerNotebook(clone) {
       function commitInventory(nextName, nextQty, { rerender = false } = {}) {
         const nextNotebook = getNotebook();
         const inventory = normalizeNotebookInventory(nextNotebook.inventory);
-        while (inventory.length < 10) inventory.push({ name: '', qty: 1 });
 
         const trimmedName = (nextName || '').trim();
         const qty = clampNotebookQty(nextQty);
@@ -422,7 +561,7 @@ function renderPlayerNotebook(clone) {
           inventory[index] = { name: trimmedName, qty: Math.max(1, qty || 1) };
         }
 
-        nextNotebook.inventory = inventory.filter(entry => entry.name);
+        nextNotebook.inventory = inventory;
         saveNotebook(nextNotebook);
         if (rerender) renderInventoryGrid();
       }
@@ -448,14 +587,151 @@ function renderPlayerNotebook(clone) {
     });
   }
 
-  menuButtons.forEach(button => {
+  function renderCustomSectionDetail() {
+    if (!customSectionDetail) return;
+
+    const notebook = getNotebook();
+    const section = getActiveCustomSection(notebook);
+    if (!section) {
+      showCustomSectionListView();
+      customSectionDetail.innerHTML = '<div class="bestiary-detail-empty">Selecciona o crea una seccion para empezar.</div>';
+      return;
+    }
+
+    const entry = section.entries.find(item => item.id === activeCustomEntryId);
+    if (!entry) {
+      showCustomSectionListView();
+      customSectionDetail.innerHTML = '<div class="bestiary-detail-empty">Selecciona una entrada o crea una nueva para escribir tus notas.</div>';
+      return;
+    }
+
+    customSectionDetail.innerHTML = `
+      <div class="bestiary-detail-card">
+        <div class="bestiary-detail-title">${escapeHtml(entry.name)}</div>
+        <textarea class="note-area bestiary-note-area" placeholder="Detalles, pistas, ideas o recordatorios..."></textarea>
+      </div>
+    `;
+
+    const area = customSectionDetail.querySelector('.bestiary-note-area');
+    if (!area) return;
+    area.value = entry.notes || '';
+    area.addEventListener('input', () => {
+      const nextNotebook = getNotebook();
+      const nextSection = nextNotebook.customSections.find(item => item.id === section.id);
+      const nextEntry = nextSection?.entries.find(item => item.id === entry.id);
+      if (!nextEntry) return;
+      nextEntry.notes = area.value;
+      saveNotebook(nextNotebook);
+    });
+  }
+
+  function renderCustomSection() {
+    if (!customSectionList || !customSectionDetail) return;
+
+    const notebook = getNotebook();
+    const section = getActiveCustomSection(notebook);
+    customSectionList.innerHTML = '';
+
+    if (!section) {
+      customSectionDetail.innerHTML = '<div class="bestiary-detail-empty">Selecciona o crea una seccion para empezar.</div>';
+      return;
+    }
+
+    const visibleEntries = getVisibleCustomEntries(section);
+    if (activeCustomEntryId && !section.entries.some(entry => entry.id === activeCustomEntryId)) {
+      activeCustomEntryId = null;
+    }
+    if (!visibleEntries.some(entry => entry.id === activeCustomEntryId)) {
+      activeCustomEntryId = visibleEntries[0]?.id || null;
+    }
+
+    if (!section.entries.length) {
+      customSectionList.innerHTML = '<div class="bestiary-empty">Esta seccion aun no tiene entradas.</div>';
+      renderCustomSectionDetail();
+      return;
+    }
+
+    if (!visibleEntries.length) {
+      customSectionList.innerHTML = '<div class="bestiary-empty">No hay resultados para esa busqueda.</div>';
+      activeCustomEntryId = null;
+      renderCustomSectionDetail();
+      return;
+    }
+
+    visibleEntries.forEach(entry => {
+      const item = document.createElement('div');
+      item.className = 'bestiary-entry custom-section-entry' + (activeCustomEntryId === entry.id ? ' is-active' : '');
+      item.innerHTML = `
+        <button type="button" class="custom-section-entry-main">
+          <span class="bestiary-entry-name">${escapeHtml(entry.name)}</span>
+          ${entry.sessionName ? `<span class="bestiary-entry-state">${escapeHtml(entry.sessionName)}</span>` : ''}
+        </button>
+        <button type="button" class="custom-section-entry-delete" title="Borrar entrada" aria-label="Borrar entrada">${UI_ICONS.close}</button>
+      `;
+      item.querySelector('.custom-section-entry-main')?.addEventListener('click', () => {
+        activeCustomEntryId = entry.id;
+        renderCustomSection();
+        showCustomSectionDetailView();
+      });
+      item.querySelector('.custom-section-entry-delete')?.addEventListener('click', event => {
+        event.stopPropagation();
+        showConfirm(
+          `¿Eliminar la entrada "${entry.name}"?`,
+          () => {
+            const notebook = getNotebook();
+            const nextSection = notebook.customSections.find(sectionItem => sectionItem.id === section.id);
+            if (!nextSection) return;
+            nextSection.entries = nextSection.entries.filter(sectionEntry => sectionEntry.id !== entry.id);
+            if (activeCustomEntryId === entry.id) activeCustomEntryId = null;
+            saveNotebook(notebook);
+            renderCustomSection();
+            showToast('Entrada eliminada', 'info');
+          },
+          'Eliminar entrada'
+        );
+      });
+      customSectionList.appendChild(item);
+    });
+
+    renderCustomSectionDetail();
+  }
+
+  fixedMenuButtons.forEach(button => {
     button.addEventListener('click', () => {
       openNotebookSection(button.dataset.notebookOpen);
     });
   });
 
+  addSectionButton?.addEventListener('click', () => {
+    openNotebookNameModal({
+      title: 'Nueva sección',
+      label: 'Nombre de la sección',
+      placeholder: 'Ej: Rumores de la ciudad',
+      submitLabel: 'Crear',
+      onSubmit: name => {
+        const notebook = getNotebook();
+        const section = { id: uid(), name, entries: [] };
+        notebook.customSections.push(section);
+        saveNotebook(notebook);
+        customSectionFilter = '';
+        if (customSectionSearch) customSectionSearch.value = '';
+        renderNotebookMenu();
+        openCustomSection(section.id);
+        showToast('Seccion creada', 'success');
+      }
+    });
+  });
+
   backButtons.forEach(button => {
     button.addEventListener('click', () => {
+      if (isNotebookMobile() && activeNotebookPanel === 'bestiary' && bestiaryLayout?.classList.contains('is-detail-view')) {
+        showBestiaryListView();
+        return;
+      }
+      if (isNotebookMobile() && activeNotebookPanel === 'custom' && customSectionLayout?.classList.contains('is-detail-view')) {
+        showCustomSectionListView();
+        return;
+      }
       openNotebookMenu();
     });
   });
@@ -467,6 +743,66 @@ function renderPlayerNotebook(clone) {
       renderBestiaryList();
     });
   }
+
+  customSectionSearch?.addEventListener('input', () => {
+    customSectionFilter = customSectionSearch.value.trim().toLowerCase();
+    renderCustomSection();
+  });
+
+  customSectionAddEntryButton?.addEventListener('click', () => {
+    const section = getActiveCustomSection();
+    if (!section) {
+      showToast('Primero crea o abre una seccion', 'info');
+      return;
+    }
+
+    openNotebookNameModal({
+      title: 'Nueva entrada',
+      label: `Entrada de ${section.name}`,
+      placeholder: 'Ej: Informante del puerto',
+      submitLabel: 'Crear',
+      onSubmit: name => {
+        const notebook = getNotebook();
+        const nextSection = notebook.customSections.find(item => item.id === section.id);
+        if (!nextSection) return;
+
+        const entry = { id: uid(), name, notes: '', sessionName: notebookSessionName };
+        nextSection.entries.push(entry);
+        saveNotebook(notebook);
+        activeCustomEntryId = entry.id;
+        customSectionFilter = '';
+        if (customSectionSearch) customSectionSearch.value = '';
+        renderCustomSection();
+        updateNotebookPopupTitle();
+        showToast('Entrada creada', 'success');
+      }
+    });
+  });
+
+  customSectionDeleteButton?.addEventListener('click', () => {
+    const section = getActiveCustomSection();
+    if (!section) {
+      showToast('Primero crea o abre una seccion', 'info');
+      return;
+    }
+
+    showConfirm(
+      `¿Eliminar la sección "${section.name}"? Se borrarán también todas sus entradas.`,
+      () => {
+        const notebook = getNotebook();
+        notebook.customSections = notebook.customSections.filter(item => item.id !== section.id);
+        saveNotebook(notebook);
+        customSectionFilter = '';
+        if (customSectionSearch) customSectionSearch.value = '';
+        activeCustomSectionId = null;
+        activeCustomEntryId = null;
+        renderNotebookMenu();
+        openNotebookMenu();
+        showToast('Seccion eliminada', 'info');
+      },
+      'Eliminar sección'
+    );
+  });
 
   if (notesArea) {
     notesArea.value = getNotebook().notes || '';
@@ -481,11 +817,16 @@ function renderPlayerNotebook(clone) {
 
   clone._openPlayerBestiaryEnemy = enemyId => openBestiaryEnemy(enemyId);
   clone._openPlayerNotebookMenu = () => openNotebookMenu();
+  clone._resetPlayerNotebookState = () => openNotebookMenu();
+  updateNotebookPopupTitle();
+  renderNotebookMenu();
   openNotebookMenu();
   showBestiaryListView();
+  showCustomSectionListView();
   renderBestiaryList();
   renderInventoryGrid();
   renderBestiaryDetail();
+  renderCustomSection();
 }
 
 function getCurrentStateDoc() {
@@ -1748,7 +2089,7 @@ function buildSessionView(session) {
     clone.querySelectorAll('.dm-only-ctrl').forEach(el => el.style.display = 'none');
     const pnw = clone.querySelector('.player-notes-panel-wrap');
     if (pnw) pnw.style.display = '';
-    renderPlayerNotebook(clone);
+    renderPlayerNotebook(clone, session);
   }
 
   // Popup buttons
@@ -1763,6 +2104,7 @@ function buildSessionView(session) {
   }
   const notesPopupTitle = clone.querySelector('.popup-notes-title');
   if (notesPopupTitle) notesPopupTitle.innerHTML = dm ? `${UI_ICONS.quill} Notas del DM` : `${UI_ICONS.book} Mi Cuaderno`;
+  if (notesPopup) notesPopup.classList.toggle('player-notebook-popup', !dm);
 
   function openPopup(popup, btn) {
     popup.style.display = 'flex';
@@ -1771,6 +2113,7 @@ function buildSessionView(session) {
   function closePopup(popup, btn) {
     popup.style.display = 'none';
     btn.classList.remove('active');
+    if (!dm && popup === notesPopup) clone._resetPlayerNotebookState?.();
   }
   if (notesBtn && notesPopup) {
     notesBtn.addEventListener('click', () => {
@@ -3604,9 +3947,59 @@ async function switchToCampaign(campaignId) {
 // ===========================
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeOpenSessionPopups() {
+  let closedAny = false;
+  document.querySelectorAll('.session-popup').forEach(popup => {
+    if (popup.style.display === 'none') return;
+    popup.style.display = 'none';
+    popup.closest('.view')?.querySelectorAll('.tool-popup-btn.active').forEach(btn => btn.classList.remove('active'));
+    closedAny = true;
+  });
+  return closedAny;
+}
+function closeTextInputModal() {
+  textInputModalResolver = null;
+  closeModal('modal-text-input');
+}
+function openTextInputModal({ title, label, placeholder, submitLabel, initialValue = '', onSubmit }) {
+  const titleEl = document.getElementById('modal-text-input-title');
+  const labelEl = document.getElementById('modal-text-input-label');
+  const fieldEl = document.getElementById('modal-text-input-field');
+  const errorEl = document.getElementById('modal-text-input-error');
+  const submitEl = document.getElementById('modal-text-input-submit');
+  if (!titleEl || !labelEl || !fieldEl || !errorEl || !submitEl) return;
+
+  titleEl.textContent = title || 'Nuevo nombre';
+  labelEl.textContent = label || 'Nombre';
+  fieldEl.placeholder = placeholder || '';
+  fieldEl.value = initialValue || '';
+  submitEl.textContent = submitLabel || 'Guardar';
+  errorEl.textContent = '';
+
+  textInputModalResolver = () => {
+    const maybeError = onSubmit?.(fieldEl.value) || null;
+    if (maybeError) {
+      errorEl.textContent = maybeError;
+      return;
+    }
+    closeTextInputModal();
+  };
+
+  submitEl.onclick = () => textInputModalResolver?.();
+  fieldEl.onkeydown = event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      textInputModalResolver?.();
+    }
+  };
+
+  openModal('modal-text-input');
+  requestAnimationFrame(() => fieldEl.focus());
+}
 // Expose to global scope for onclick handlers in HTML
 window.openModal = openModal;
 window.closeModal = closeModal;
+window.closeTextInputModal = closeTextInputModal;
 document.querySelectorAll('.modal-overlay').forEach(overlay=>{
   overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.classList.remove('open'); });
 });
@@ -3616,6 +4009,10 @@ document.getElementById('login-user').addEventListener('keydown', e=>{ if(e.key=
 // Escape key closes any open modal
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){
+    if (closeOpenSessionPopups()) {
+      hideEnemyTooltip();
+      return;
+    }
     const open = document.querySelector('.modal-overlay.open');
     if(open) open.classList.remove('open');
     hideEnemyTooltip();

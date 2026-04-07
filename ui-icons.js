@@ -52,13 +52,27 @@ export const UI_ICON_PATHS = {
 // Cache de SVGs cargados para que app.js pueda seguir usandolos como strings.
 export const UI_ICONS = {};
 
+function normalizeSvgMarkup(svgText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, 'image/svg+xml');
+  const svg = doc.documentElement;
+  if (!svg || svg.nodeName === 'parsererror') return svgText;
+
+  svg.classList.add('ui-icon');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+
+  return svg.outerHTML;
+}
+
 export async function loadIcons() {
   const entries = Object.entries(UI_ICON_PATHS);
   await Promise.all(entries.map(async ([name, path]) => {
     if (UI_ICONS[name]) return;
     const res = await fetch(path);
     if (!res.ok) throw new Error(`No se pudo cargar el icono ${name} desde ${path}`);
-    UI_ICONS[name] = await res.text();
+    UI_ICONS[name] = normalizeSvgMarkup(await res.text());
   }));
   return UI_ICONS;
 }
