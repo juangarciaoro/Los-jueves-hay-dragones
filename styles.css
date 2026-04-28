@@ -515,7 +515,7 @@ body.spectator-mode #main-content { display:none !important; }
 .player-notebook-menu{display:none;flex:1;min-height:0;}
 .player-notebook-menu.is-active{display:flex;}
 .player-notebook-tabs{
-  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;
   width:100%;align-content:start;
 }
 .player-notebook-tab{
@@ -583,6 +583,9 @@ body.spectator-mode #main-content { display:none !important; }
   color:var(--text-muted);font-family:'Crimson Text',serif;font-size:1rem;font-style:italic;
 }
 .player-notebook-notes{min-height:0;resize:none;}
+.player-notebook-charsheet{
+  min-height:0;
+}
 .custom-section-toolbar{
   display:flex;
   align-items:flex-start;

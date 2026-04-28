@@ -203,6 +203,441 @@ function autosizeTextareaDeferred(el) {
   requestAnimationFrame(() => autosizeTextarea(el));
 }
 
+function getDMNotebook(session) {
+  return {
+    notes: session?.dm_notes || '',
+    quickNotes: session?.quick_notes || '',
+    customSections: normalizeNotebookSections(session?.dmCustomSections)
+  };
+}
+
+function setDMNotebook(session, notebook) {
+  session.dm_notes = notebook.notes || '';
+  session.quick_notes = notebook.quickNotes || '';
+  session.dmCustomSections = normalizeNotebookSections(notebook.customSections);
+}
+
+function getCharSheetMarkup(char) {
+  if (!char) {
+    const hasId = !!getLinkedCharIdForUser(currentUser?.id);
+    const charsLoaded = state.chars.length;
+    return hasId && charsLoaded === 0
+      ? `<div style="font-family:'Cinzel',serif;color:var(--ink-faded);padding:30px;text-align:center;font-size:.85rem;letter-spacing:2px;line-height:2">
+           Cargando personaje…<br><span style="font-size:.7rem;opacity:.6">Si este mensaje persiste, recarga la página</span>
+         </div>`
+      : `<div style="font-family:'Cinzel',serif;color:var(--ink-faded);padding:30px;text-align:center;font-size:.85rem;letter-spacing:2px;">Sin personaje asignado</div>`;
+  }
+
+  const skillNames = {nadar:'Nadar/Bucear',cerraduras:'Abrir Cerraduras',idiomas:'Idiomas',sigilo:'Sigilo',medicina:'Medicina',brutalidad:'Brutalidad',observacion:'Observación',intimidar:'Intimidar',enganar:'Engañar',persuasion:'Persuasión',acrobacias:'Acrobacias',montar:'Montar',agarrar:'Agarrar',reflejos:'Reflejos'};
+  const weaponNames = {espadas:'Espadas',dagas:'Dagas',arcos:'Arcos',mandobles:'Mandobles',hachas:'Hachas',contundentes:'Contundentes',arrojadizas:'Arrojadizas',sin_armas:'Sin armas'};
+  const costLabel = value => value===15?'●●●':value===5?'●●○':value===1?'●○○':'○○○';
+  const linkedUser = char.userId ? globalUsers.find(u => u.id === char.userId) : null;
+
+  const skillsHtml = Object.entries(skillNames).map(([key, label]) => {
+    const value = char.skills?.[key] || 0;
+    return `<div class="skill-row"><span class="skill-attr"></span><label>${label}</label><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem">${costLabel(value)}</span></div>`;
+  }).join('');
+  const weaponsHtml = Object.entries(weaponNames).map(([key, label]) => {
+    const value = char.weaponSkills?.[key] || 0;
+    return `<div class="skill-row"><label>${label}</label><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem">${costLabel(value)}</span></div>`;
+  }).join('');
+  const habsHtml = (char.habs || []).map(hab => {
+    const desc = (hab.desc || '').replace(/\n/g, '<br>');
+    const level = hab.level || 0;
+    return `<div style="margin-bottom:8px;display:flex;gap:12px;align-items:flex-start"><div style="flex:1"><strong style="font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold)">${hab.name}</strong><p style="font-size:.9rem;color:var(--ink-faded);margin-top:3px">${desc}</p></div><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem;white-space:nowrap">${costLabel(level)}</span></div>`;
+  }).join('');
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <h2 style="font-family:'Cinzel Decorative',serif;color:var(--gold);font-size:1.1rem">${char.name}</h2>
+      <button class="btn btn-gold btn-sm" onclick="openCharModal('${char.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
+    </div>
+    <div class="charsheet-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="panel">
+        <div class="panel-header">Identidad</div>
+        <div class="panel-body" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Clase</span><div>${char.class||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Raza</span><div>${char.race||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Alineamiento</span><div>${char.align||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Jugador</span><div>${linkedUser?.username || char.player || '—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Altura</span><div>${char.height||'—'}</div></div>
+          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Edad</span><div>${char.age||'—'}</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">Atributos y Recursos</div>
+        <div class="panel-body">
+          <div class="charsheet-attrs" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
+            ${['fue','int','car','des','vida'].map(attr => {const value = char[attr] || 10; return `<div class="attr-box"><label>${attr.toUpperCase()}</label><div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--ink)">${value}</div></div>`;}).join('')}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
+            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">PM</span><div style="font-family:'Cinzel',serif;font-size:1rem;color:#4a7a9b">${char.pm||0}</div></div>
+            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Armadura</span><div>${char.armor||'—'}</div></div>
+            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Oro</span><div>${char.gold||0}</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">Habilidades</div>
+        <div class="panel-body"><div class="skills-grid">${skillsHtml}</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">Armamentísticas</div>
+        <div class="panel-body"><div class="skills-grid">${weaponsHtml}</div></div>
+      </div>
+      ${habsHtml ? `<div class="panel cs-span2" style="grid-column:span 2"><div class="panel-header">Habilidades Especiales</div><div class="panel-body">${habsHtml}</div></div>` : ''}
+      ${char.backpack ? `<div class="panel"><div class="panel-header">Mochila</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.backpack}</div></div>` : ''}
+      ${char.notes ? `<div class="panel"><div class="panel-header">Notas</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.notes}</div></div>` : ''}
+    </div>`;
+}
+
+function renderDMNotebook(clone, session) {
+  const wrap = clone.querySelector('.dm-notes-panel-wrap');
+  if (!wrap) return;
+
+  const menu = clone.querySelector('[data-dm-notebook-menu]');
+  const tabs = clone.querySelector('[data-dm-notebook-tabs]');
+  const fixedMenuButtons = Array.from(clone.querySelectorAll('[data-dm-notebook-open]'));
+  const backButtons = Array.from(clone.querySelectorAll('[data-dm-notebook-back]'));
+  const panels = Array.from(clone.querySelectorAll('[data-dm-notebook-panel]'));
+  const addSectionButton = clone.querySelector('[data-dm-notebook-add-section]');
+  const customSectionSearch = clone.querySelector('[data-dm-custom-section-search]');
+  const customSectionLayout = clone.querySelector('[data-dm-custom-section-layout]');
+  const customSectionList = clone.querySelector('[data-dm-custom-section-list]');
+  const customSectionDetail = clone.querySelector('[data-dm-custom-section-detail]');
+  const customSectionAddEntryButton = clone.querySelector('[data-dm-custom-section-add-entry]');
+  const customSectionDeleteButton = clone.querySelector('[data-dm-custom-section-delete]');
+  const notesPopupTitle = clone.querySelector('.popup-notes-title');
+  let activeCustomSectionId = null;
+  let activeCustomEntryId = null;
+  let customSectionFilter = '';
+  let activePanel = null;
+
+  function getNotebook() {
+    return getDMNotebook(session);
+  }
+
+  function saveNotebook(notebook) {
+    setDMNotebook(session, notebook);
+    saveState();
+  }
+
+  function updatePopupTitle() {
+    if (!notesPopupTitle) return;
+    let sectionLabel = '';
+    if (activePanel === 'quick') sectionLabel = 'Notas rápidas';
+    else if (activePanel === 'custom') sectionLabel = getActiveCustomSection()?.name || '';
+    const suffix = sectionLabel ? ` - ${escapeHtml(sectionLabel)}` : '';
+    notesPopupTitle.innerHTML = `${UI_ICONS.quill} Notas del DM${suffix}`;
+  }
+
+  function getActiveCustomSection(notebook = getNotebook()) {
+    return notebook.customSections.find(section => section.id === activeCustomSectionId) || null;
+  }
+
+  function getVisibleCustomEntries(section) {
+    if (!section) return [];
+    return section.entries.filter(entry => !customSectionFilter || entry.name.toLowerCase().includes(customSectionFilter));
+  }
+
+  function showCustomSectionListView() {
+    if (!customSectionLayout) return;
+    customSectionLayout.classList.remove('is-detail-view');
+    if (customSectionSearch) customSectionSearch.style.display = '';
+  }
+
+  function showCustomSectionDetailView() {
+    if (!customSectionLayout || !window.matchMedia('(max-width: 600px)').matches) return;
+    customSectionLayout.classList.add('is-detail-view');
+    if (customSectionSearch) customSectionSearch.style.display = 'none';
+  }
+
+  function renderNotebookMenu() {
+    if (!tabs) return;
+    tabs.querySelectorAll('[data-dm-notebook-open-custom]').forEach(button => button.remove());
+
+    const notebook = getNotebook();
+    const fragment = document.createDocumentFragment();
+    notebook.customSections.forEach(section => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'player-notebook-tab player-notebook-tab-custom';
+      button.dataset.dmNotebookOpenCustom = section.id;
+      button.innerHTML = `${UI_ICONS.book}<span>${escapeHtml(section.name)}</span>`;
+      button.addEventListener('click', () => {
+        openCustomSection(section.id);
+      });
+      fragment.appendChild(button);
+    });
+
+    if (addSectionButton) tabs.insertBefore(fragment, addSectionButton);
+    else tabs.appendChild(fragment);
+  }
+
+  function renderCustomSectionDetail() {
+    if (!customSectionDetail) return;
+
+    const notebook = getNotebook();
+    const section = getActiveCustomSection(notebook);
+    if (!section) {
+      showCustomSectionListView();
+      customSectionDetail.innerHTML = '<div class="bestiary-detail-empty">Selecciona o crea una sección para empezar.</div>';
+      return;
+    }
+
+    const entry = section.entries.find(item => item.id === activeCustomEntryId);
+    if (!entry) {
+      showCustomSectionListView();
+      customSectionDetail.innerHTML = '<div class="bestiary-detail-empty">Selecciona una entrada o crea una nueva para escribir tus notas.</div>';
+      return;
+    }
+
+    customSectionDetail.innerHTML = `
+      <div class="bestiary-detail-card">
+        <div class="bestiary-detail-title">${escapeHtml(entry.name)}</div>
+        <textarea class="note-area bestiary-note-area" placeholder="Detalles, pistas, ideas o recordatorios..."></textarea>
+      </div>
+    `;
+
+    const area = customSectionDetail.querySelector('.bestiary-note-area');
+    if (!area) return;
+    area.value = entry.notes || '';
+    area.addEventListener('input', () => {
+      const nextNotebook = getNotebook();
+      const nextSection = nextNotebook.customSections.find(item => item.id === section.id);
+      const nextEntry = nextSection?.entries.find(item => item.id === entry.id);
+      if (!nextEntry) return;
+      nextEntry.notes = area.value;
+      saveNotebook(nextNotebook);
+    });
+  }
+
+  function renderCustomSection() {
+    if (!customSectionList || !customSectionDetail) return;
+
+    const notebook = getNotebook();
+    const section = getActiveCustomSection(notebook);
+    customSectionList.innerHTML = '';
+
+    if (!section) {
+      customSectionDetail.innerHTML = '<div class="bestiary-detail-empty">Selecciona o crea una sección para empezar.</div>';
+      return;
+    }
+
+    const visibleEntries = getVisibleCustomEntries(section);
+    if (activeCustomEntryId && !section.entries.some(entry => entry.id === activeCustomEntryId)) {
+      activeCustomEntryId = null;
+    }
+    if (!visibleEntries.some(entry => entry.id === activeCustomEntryId)) {
+      activeCustomEntryId = visibleEntries[0]?.id || null;
+    }
+
+    if (!section.entries.length) {
+      customSectionList.innerHTML = '<div class="bestiary-empty">Esta sección aún no tiene entradas.</div>';
+      renderCustomSectionDetail();
+      return;
+    }
+
+    if (!visibleEntries.length) {
+      customSectionList.innerHTML = '<div class="bestiary-empty">No hay resultados para esa búsqueda.</div>';
+      activeCustomEntryId = null;
+      renderCustomSectionDetail();
+      return;
+    }
+
+    visibleEntries.forEach(entry => {
+      const item = document.createElement('div');
+      item.className = 'bestiary-entry custom-section-entry' + (activeCustomEntryId === entry.id ? ' is-active' : '');
+      item.innerHTML = `
+        <button type="button" class="custom-section-entry-main">
+          <span class="bestiary-entry-name">${escapeHtml(entry.name)}</span>
+          ${entry.sessionName ? `<span class="bestiary-entry-state">${escapeHtml(entry.sessionName)}</span>` : ''}
+        </button>
+        <button type="button" class="custom-section-entry-delete" title="Borrar entrada" aria-label="Borrar entrada">${UI_ICONS.close}</button>
+      `;
+      item.querySelector('.custom-section-entry-main')?.addEventListener('click', () => {
+        activeCustomEntryId = entry.id;
+        renderCustomSection();
+        showCustomSectionDetailView();
+      });
+      item.querySelector('.custom-section-entry-delete')?.addEventListener('click', event => {
+        event.stopPropagation();
+        showConfirm(
+          `¿Eliminar la entrada "${entry.name}"?`,
+          () => {
+            const notebook = getNotebook();
+            const nextSection = notebook.customSections.find(sectionItem => sectionItem.id === section.id);
+            if (!nextSection) return;
+            nextSection.entries = nextSection.entries.filter(sectionEntry => sectionEntry.id !== entry.id);
+            if (activeCustomEntryId === entry.id) activeCustomEntryId = null;
+            saveNotebook(notebook);
+            renderCustomSection();
+            showToast('Entrada eliminada', 'info');
+          },
+          'Eliminar entrada'
+        );
+      });
+      customSectionList.appendChild(item);
+    });
+
+    renderCustomSectionDetail();
+  }
+
+  function openMenu() {
+    renderNotebookMenu();
+    if (menu) menu.classList.add('is-active');
+    panels.forEach(panel => panel.classList.remove('is-active'));
+    showCustomSectionListView();
+    activeCustomSectionId = null;
+    activeCustomEntryId = null;
+    activePanel = null;
+    updatePopupTitle();
+  }
+
+  function openSection(sectionName) {
+    if (menu) menu.classList.remove('is-active');
+    panels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.dmNotebookPanel === sectionName));
+    if (sectionName === 'custom') showCustomSectionListView();
+    activePanel = sectionName;
+    if (sectionName !== 'custom') {
+      activeCustomSectionId = null;
+      activeCustomEntryId = null;
+    }
+    updatePopupTitle();
+  }
+
+  function openCustomSection(sectionId) {
+    const notebook = getNotebook();
+    const section = notebook.customSections.find(item => item.id === sectionId);
+    if (!section) {
+      openMenu();
+      return;
+    }
+
+    activeCustomSectionId = section.id;
+    const visibleEntries = getVisibleCustomEntries(section);
+    if (!section.entries.some(entry => entry.id === activeCustomEntryId)) {
+      activeCustomEntryId = visibleEntries[0]?.id || section.entries[0]?.id || null;
+    }
+    if (customSectionSearch) customSectionSearch.value = customSectionFilter;
+    openSection('custom');
+    updatePopupTitle();
+    renderCustomSection();
+  }
+
+  fixedMenuButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      openSection(button.dataset.dmNotebookOpen);
+    });
+  });
+
+  addSectionButton?.addEventListener('click', () => {
+    openTextInputModal({
+      title: 'Nueva sección',
+      label: 'Nombre de la sección',
+      placeholder: 'Ej: Pistas del culto',
+      submitLabel: 'Crear',
+      onSubmit: value => {
+        const name = value.trim();
+        if (!name) return 'Introduce un nombre valido';
+        const notebook = getNotebook();
+        const section = { id: uid(), name, entries: [] };
+        notebook.customSections.push(section);
+        saveNotebook(notebook);
+        customSectionFilter = '';
+        if (customSectionSearch) customSectionSearch.value = '';
+        renderNotebookMenu();
+        openCustomSection(section.id);
+        showToast('Sección creada', 'success');
+        return null;
+      }
+    });
+  });
+
+  backButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      if (activePanel === 'custom' && customSectionLayout?.classList.contains('is-detail-view')) {
+        showCustomSectionListView();
+        return;
+      }
+      openMenu();
+    });
+  });
+
+  customSectionSearch?.addEventListener('input', () => {
+    customSectionFilter = customSectionSearch.value.trim().toLowerCase();
+    renderCustomSection();
+  });
+
+  customSectionAddEntryButton?.addEventListener('click', () => {
+    const section = getActiveCustomSection();
+    if (!section) {
+      showToast('Primero crea o abre una sección', 'info');
+      return;
+    }
+
+    openTextInputModal({
+      title: 'Nueva entrada',
+      label: `Entrada de ${section.name}`,
+      placeholder: 'Ej: Sospechoso de la sesión',
+      submitLabel: 'Crear',
+      onSubmit: value => {
+        const name = value.trim();
+        if (!name) return 'Introduce un nombre valido';
+        const notebook = getNotebook();
+        const nextSection = notebook.customSections.find(item => item.id === section.id);
+        if (!nextSection) return null;
+
+        const entry = { id: uid(), name, notes: '', sessionName: (session?.name || '').trim() };
+        nextSection.entries.push(entry);
+        saveNotebook(notebook);
+        activeCustomEntryId = entry.id;
+        customSectionFilter = '';
+        if (customSectionSearch) customSectionSearch.value = '';
+        renderCustomSection();
+        updatePopupTitle();
+        showToast('Entrada creada', 'success');
+        return null;
+      }
+    });
+  });
+
+  customSectionDeleteButton?.addEventListener('click', () => {
+    const section = getActiveCustomSection();
+    if (!section) {
+      showToast('Primero crea o abre una sección', 'info');
+      return;
+    }
+
+    showConfirm(
+      `¿Eliminar la sección "${section.name}"? Se borrarán también todas sus entradas.`,
+      () => {
+        const notebook = getNotebook();
+        notebook.customSections = notebook.customSections.filter(item => item.id !== section.id);
+        saveNotebook(notebook);
+        customSectionFilter = '';
+        if (customSectionSearch) customSectionSearch.value = '';
+        activeCustomSectionId = null;
+        activeCustomEntryId = null;
+        renderNotebookMenu();
+        openMenu();
+        showToast('Sección eliminada', 'info');
+      },
+      'Eliminar sección'
+    );
+  });
+
+  clone._openDMNotebookMenu = () => openMenu();
+  clone._resetDMNotebookState = () => openMenu();
+  clone._refreshDMNotebook = () => {
+    renderNotebookMenu();
+    if (activePanel === 'custom') renderCustomSection();
+    updatePopupTitle();
+  };
+  updatePopupTitle();
+  openMenu();
+}
+
 function renderPlayerNotebook(clone, session) {
   if (!currentUser) return;
 
@@ -228,6 +663,7 @@ function renderPlayerNotebook(clone, session) {
   const customSectionDetail = clone.querySelector('[data-custom-section-detail]');
   const customSectionAddEntryButton = clone.querySelector('[data-custom-section-add-entry]');
   const customSectionDeleteButton = clone.querySelector('[data-custom-section-delete]');
+  const charsheetWrap = clone.querySelector('[data-player-notebook-charsheet]');
   const notesPopupTitle = clone.querySelector('.popup-notes-title');
   let activeBestiaryEnemyId = null;
   let bestiaryFilter = '';
@@ -260,9 +696,15 @@ function renderPlayerNotebook(clone, session) {
     if (activeNotebookPanel === 'bestiary') sectionLabel = 'Bestiario';
     else if (activeNotebookPanel === 'inventory') sectionLabel = 'Inventario';
     else if (activeNotebookPanel === 'notes') sectionLabel = 'Cuaderno de notas';
+    else if (activeNotebookPanel === 'charsheet') sectionLabel = 'Hoja de personaje';
     else if (activeNotebookPanel === 'custom') sectionLabel = getActiveCustomSection()?.name || '';
     const suffix = sectionLabel ? ` - ${escapeHtml(sectionLabel)}` : '';
     notesPopupTitle.innerHTML = `${UI_ICONS.book} Mi Cuaderno${suffix}`;
+  }
+
+  function renderNotebookCharsheet() {
+    if (!charsheetWrap) return;
+    charsheetWrap.innerHTML = getCharSheetMarkup(getLinkedCharForUser(currentUser?.id));
   }
 
   function openNotebookNameModal(config) {
@@ -331,6 +773,7 @@ function renderPlayerNotebook(clone, session) {
     panels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.notebookPanel === sectionName));
     if (sectionName === 'bestiary') showBestiaryListView();
     if (sectionName === 'custom') showCustomSectionListView();
+    if (sectionName === 'charsheet') renderNotebookCharsheet();
     activeNotebookPanel = sectionName;
     if (sectionName !== 'custom') {
       activeCustomSectionId = null;
@@ -818,9 +1261,11 @@ function renderPlayerNotebook(clone, session) {
   clone._openPlayerBestiaryEnemy = enemyId => openBestiaryEnemy(enemyId);
   clone._openPlayerNotebookMenu = () => openNotebookMenu();
   clone._resetPlayerNotebookState = () => openNotebookMenu();
+  clone._refreshPlayerNotebookCharSheet = () => renderNotebookCharsheet();
   updateNotebookPopupTitle();
   renderNotebookMenu();
   openNotebookMenu();
+  renderNotebookCharsheet();
   showBestiaryListView();
   showCustomSectionListView();
   renderBestiaryList();
@@ -2031,7 +2476,7 @@ function openNewSessionModal() {
 
 function createSession() {
   const name = document.getElementById('new-session-name').value.trim() || `Sesión ${state.sessions.length + 1}`;
-  const session = { id: uid(), name, title:'', diary:'', dm_notes:'', quick_notes:'', combatants:[], round:1, activeTurn:0, rollHistory:[], published: false };
+  const session = { id: uid(), name, title:'', diary:'', dm_notes:'', quick_notes:'', dmCustomSections:[], combatants:[], round:1, activeTurn:0, rollHistory:[], published: false };
   state.sessions.push(session);
   saveState();
   closeModal('modal-new-session');
@@ -2085,7 +2530,9 @@ function buildSessionView(session) {
   });
 
   // DM-only sections
-  if (!dm) {
+  if (dm) {
+    renderDMNotebook(clone, session);
+  } else {
     clone.querySelectorAll('.dm-only-ctrl').forEach(el => el.style.display = 'none');
     const pnw = clone.querySelector('.player-notes-panel-wrap');
     if (pnw) pnw.style.display = '';
@@ -2104,7 +2551,7 @@ function buildSessionView(session) {
   }
   const notesPopupTitle = clone.querySelector('.popup-notes-title');
   if (notesPopupTitle) notesPopupTitle.innerHTML = dm ? `${UI_ICONS.quill} Notas del DM` : `${UI_ICONS.book} Mi Cuaderno`;
-  if (notesPopup) notesPopup.classList.toggle('player-notebook-popup', !dm);
+  if (notesPopup) notesPopup.classList.add('player-notebook-popup');
 
   function openPopup(popup, btn) {
     popup.style.display = 'flex';
@@ -2113,11 +2560,13 @@ function buildSessionView(session) {
   function closePopup(popup, btn) {
     popup.style.display = 'none';
     btn.classList.remove('active');
+    if (dm && popup === notesPopup) clone._resetDMNotebookState?.();
     if (!dm && popup === notesPopup) clone._resetPlayerNotebookState?.();
   }
   if (notesBtn && notesPopup) {
     notesBtn.addEventListener('click', () => {
       if (notesPopup.style.display === 'none') {
+        if (dm) clone._openDMNotebookMenu?.();
         if (!dm) clone._openPlayerNotebookMenu?.();
         openPopup(notesPopup, notesBtn);
         if (dicePopup && diceBtn) closePopup(dicePopup, diceBtn);
@@ -3453,7 +3902,13 @@ function saveChar() {
   renderCharList();
   showToast('Personaje guardado', 'success');
   // If player updated their own char, refresh charsheet view
-  if(!isDM()) { const myChar = getLinkedCharForUser(currentUser?.id); if(myChar) renderCharSheetView(myChar); }
+  if(!isDM()) {
+    const myChar = getLinkedCharForUser(currentUser?.id);
+    renderCharSheetView(myChar);
+    document.querySelectorAll('#main-content .view[data-session-id]').forEach(view => {
+      view._refreshPlayerNotebookCharSheet?.();
+    });
+  }
 }
 
 function renderCharList() {
@@ -3492,79 +3947,7 @@ function renderPlayerCharPanel(char) {
 function renderCharSheetView(char) {
   const view = document.getElementById('charsheet-content');
   if (!view) return;
-  if (!char) {
-    // Diagnostic: if user has a charId but char wasn't found, show helpful message
-    const hasId = !!getLinkedCharIdForUser(currentUser?.id);
-    const charsLoaded = state.chars.length;
-    view.innerHTML = hasId && charsLoaded === 0
-      ? `<div style="font-family:'Cinzel',serif;color:var(--ink-faded);padding:30px;text-align:center;font-size:.85rem;letter-spacing:2px;line-height:2">
-           Cargando personaje…<br><span style="font-size:.7rem;opacity:.6">Si este mensaje persiste, recarga la página</span>
-         </div>`
-      : `<div style="font-family:'Cinzel',serif;color:var(--ink-faded);padding:30px;text-align:center;font-size:.85rem;letter-spacing:2px;">Sin personaje asignado</div>`;
-    return;
-  }
-  const skillNames = {nadar:'Nadar/Bucear',cerraduras:'Abrir Cerraduras',idiomas:'Idiomas',sigilo:'Sigilo',medicina:'Medicina',brutalidad:'Brutalidad',observacion:'Observación',intimidar:'Intimidar',enganar:'Engañar',persuasion:'Persuasión',acrobacias:'Acrobacias',montar:'Montar',agarrar:'Agarrar',reflejos:'Reflejos'};
-  const weaponNames = {espadas:'Espadas',dagas:'Dagas',arcos:'Arcos',mandobles:'Mandobles',hachas:'Hachas',contundentes:'Contundentes',arrojadizas:'Arrojadizas',sin_armas:'Sin armas'};
-  const costLabel = v => v===15?'●●●':v===5?'●●○':v===1?'●○○':'○○○';
-  const linkedUser = char.userId ? globalUsers.find(u => u.id === char.userId) : null;
-
-  const skillsHtml = Object.entries(skillNames).map(([k,l]) => {
-    const v = char.skills?.[k]||0;
-    return `<div class="skill-row"><span class="skill-attr"></span><label>${l}</label><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem">${costLabel(v)}</span></div>`;
-  }).join('');
-  const weaponsHtml = Object.entries(weaponNames).map(([k,l]) => {
-    const v = char.weaponSkills?.[k]||0;
-    return `<div class="skill-row"><label>${l}</label><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem">${costLabel(v)}</span></div>`;
-  }).join('');
-  const habsHtml = (char.habs||[]).map(h => {
-    const desc = (h.desc||'').replace(/\n/g, '<br>');
-    const level = h.level||0;
-    const costLabel = lv => lv===15?'●●●':lv===5?'●●○':lv===1?'●○○':'○○○';
-    return `<div style="margin-bottom:8px;display:flex;gap:12px;align-items:flex-start"><div style="flex:1"><strong style="font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold)">${h.name}</strong><p style="font-size:.9rem;color:var(--ink-faded);margin-top:3px">${desc}</p></div><span style="letter-spacing:2px;color:var(--gold);font-size:.75rem;white-space:nowrap">${costLabel(level)}</span></div>`;
-  }).join('');
-
-  view.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-      <h2 style="font-family:'Cinzel Decorative',serif;color:var(--gold);font-size:1.1rem">${char.name}</h2>
-        <button class="btn btn-gold btn-sm" onclick="openCharModal('${char.id}')">${withIcon(UI_ICONS.edit, 'Editar')}</button>
-    </div>
-    <div class="charsheet-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div class="panel">
-        <div class="panel-header">Identidad</div>
-        <div class="panel-body" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
-          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Clase</span><div>${char.class||'—'}</div></div>
-          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Raza</span><div>${char.race||'—'}</div></div>
-          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Alineamiento</span><div>${char.align||'—'}</div></div>
-          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Jugador</span><div>${linkedUser?.username || char.player || '—'}</div></div>
-          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Altura</span><div>${char.height||'—'}</div></div>
-          <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Edad</span><div>${char.age||'—'}</div></div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-header">Atributos y Recursos</div>
-        <div class="panel-body">
-          <div class="charsheet-attrs" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
-            ${['fue','int','car','des','vida'].map(a => {const v=char[a]||10;return `<div class="attr-box"><label>${a.toUpperCase()}</label><div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--ink)">${v}</div></div>`}).join('')}
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.9rem">
-            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">PM</span><div style="font-family:'Cinzel',serif;font-size:1rem;color:#4a7a9b">${char.pm||0}</div></div>
-            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Armadura</span><div>${char.armor||'—'}</div></div>
-            <div><span style="color:var(--ink-faded);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:1px;text-transform:uppercase">Oro</span><div>${char.gold||0}</div></div>
-          </div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-header">Habilidades</div>
-        <div class="panel-body"><div class="skills-grid">${skillsHtml}</div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header">Armamentísticas</div>
-        <div class="panel-body"><div class="skills-grid">${weaponsHtml}</div></div>
-      </div>
-      ${habsHtml ? `<div class="panel cs-span2" style="grid-column:span 2"><div class="panel-header">Habilidades Especiales</div><div class="panel-body">${habsHtml}</div></div>` : ''}
-      ${char.backpack ? `<div class="panel"><div class="panel-header">Mochila</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.backpack}</div></div>` : ''}
-      ${char.notes ? `<div class="panel"><div class="panel-header">Notas</div><div class="panel-body" style="font-size:.95rem;white-space:pre-wrap">${char.notes}</div></div>` : ''}
-    </div>`;
+  view.innerHTML = getCharSheetMarkup(char);
 }
 
 function deleteChar(id) {
