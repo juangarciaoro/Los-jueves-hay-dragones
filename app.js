@@ -307,9 +307,12 @@ function renderDMNotebook(clone, session) {
   const customSectionDetail = clone.querySelector('[data-dm-custom-section-detail]');
   const customSectionAddEntryButton = clone.querySelector('[data-dm-custom-section-add-entry]');
   const customSectionDeleteButton = clone.querySelector('[data-dm-custom-section-delete]');
+  const dmCharsheetSelect = clone.querySelector('[data-dm-charsheet-select]');
+  const dmCharsheetWrap = clone.querySelector('[data-dm-notebook-charsheet]');
   const notesPopupTitle = clone.querySelector('.popup-notes-title');
   let activeCustomSectionId = null;
   let activeCustomEntryId = null;
+  let activeCharsheetCharId = null;
   let customSectionFilter = '';
   let activePanel = null;
 
@@ -326,9 +329,38 @@ function renderDMNotebook(clone, session) {
     if (!notesPopupTitle) return;
     let sectionLabel = '';
     if (activePanel === 'quick') sectionLabel = 'Notas rápidas';
+    else if (activePanel === 'charsheet') sectionLabel = 'Hojas de personaje';
     else if (activePanel === 'custom') sectionLabel = getActiveCustomSection()?.name || '';
     const suffix = sectionLabel ? ` - ${escapeHtml(sectionLabel)}` : '';
     notesPopupTitle.innerHTML = `${UI_ICONS.quill} Notas del DM${suffix}`;
+  }
+
+  function renderDMCharsheetPanel() {
+    if (!dmCharsheetSelect || !dmCharsheetWrap) return;
+
+    dmCharsheetSelect.innerHTML = '';
+    if (!state.chars.length) {
+      dmCharsheetSelect.disabled = true;
+      dmCharsheetSelect.innerHTML = '<option value="">No hay personajes creados</option>';
+      dmCharsheetWrap.innerHTML = getCharSheetMarkup(null);
+      return;
+    }
+
+    dmCharsheetSelect.disabled = false;
+    state.chars.forEach(char => {
+      const option = document.createElement('option');
+      option.value = char.id;
+      option.textContent = char.name || 'Sin nombre';
+      dmCharsheetSelect.appendChild(option);
+    });
+
+    if (!state.chars.some(char => char.id === activeCharsheetCharId)) {
+      activeCharsheetCharId = state.chars[0].id;
+    }
+    dmCharsheetSelect.value = activeCharsheetCharId;
+
+    const selectedChar = state.chars.find(char => char.id === activeCharsheetCharId) || null;
+    dmCharsheetWrap.innerHTML = getCharSheetMarkup(selectedChar);
   }
 
   function getActiveCustomSection(notebook = getNotebook()) {
@@ -498,6 +530,7 @@ function renderDMNotebook(clone, session) {
     if (menu) menu.classList.remove('is-active');
     panels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.dmNotebookPanel === sectionName));
     if (sectionName === 'custom') showCustomSectionListView();
+    if (sectionName === 'charsheet') renderDMCharsheetPanel();
     activePanel = sectionName;
     if (sectionName !== 'custom') {
       activeCustomSectionId = null;
@@ -627,11 +660,17 @@ function renderDMNotebook(clone, session) {
     );
   });
 
+  dmCharsheetSelect?.addEventListener('change', () => {
+    activeCharsheetCharId = dmCharsheetSelect.value || null;
+    renderDMCharsheetPanel();
+  });
+
   clone._openDMNotebookMenu = () => openMenu();
   clone._resetDMNotebookState = () => openMenu();
   clone._refreshDMNotebook = () => {
     renderNotebookMenu();
     if (activePanel === 'custom') renderCustomSection();
+    if (activePanel === 'charsheet') renderDMCharsheetPanel();
     updatePopupTitle();
   };
   updatePopupTitle();

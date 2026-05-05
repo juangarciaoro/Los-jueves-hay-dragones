@@ -322,6 +322,9 @@
                 <button type="button" class="player-notebook-tab" data-dm-notebook-open="quick">
                   <span data-ui-icon="spark"></span> Notas rápidas
                 </button>
+                <button type="button" class="player-notebook-tab" data-dm-notebook-open="charsheet">
+                  <span data-ui-icon="helm"></span> Hojas de personaje
+                </button>
                 <button type="button" class="player-notebook-tab player-notebook-tab-add" data-dm-notebook-add-section>
                   <span data-ui-icon="plus"></span> Añadir sección
                 </button>
@@ -347,6 +350,18 @@
               </div>
               <div class="player-notebook-panel-body">
                 <textarea class="note-area player-notebook-notes" style="min-height:220px" placeholder="Apuntes al vuelo…" data-field="quick_notes"></textarea>
+              </div>
+            </div>
+
+            <div class="player-notebook-panel" data-dm-notebook-panel="charsheet">
+              <div class="player-notebook-panel-head">
+                <button type="button" class="btn btn-outline btn-sm player-notebook-back-btn" data-dm-notebook-back>
+                  <span data-ui-icon="back"></span> Volver al menu
+                </button>
+              </div>
+              <div class="player-notebook-panel-body">
+                <select class="form-input" data-dm-charsheet-select></select>
+                <div class="player-notebook-charsheet" data-dm-notebook-charsheet></div>
               </div>
             </div>
 

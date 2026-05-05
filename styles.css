@@ -502,8 +502,9 @@ body.spectator-mode #main-content { display:none !important; }
 .note-area:focus{border-color:var(--gold-light);box-shadow:0 0 0 3px rgba(166,151,123,0.12);}
 .note-area[readonly]{opacity:0.55;cursor:default;}
 
-/* Menu de pausa del jugador: bestiario, inventario y notas */
-.player-notes-panel-wrap{
+/* Menu de pausa del jugador y del DM: bestiario, inventario y notas */
+.player-notes-panel-wrap,
+.dm-notes-panel-wrap{
   display:flex;flex-direction:column;
   flex:1 1 auto;min-height:0;height:100%;
   overflow:hidden;
@@ -732,6 +733,17 @@ body.spectator-mode #main-content { display:none !important; }
   width:.86rem;
   height:.86rem;
 }
+.custom-section-layout,
+.custom-section-detail{
+  min-height:0;
+}
+.custom-section-detail,
+.custom-section-detail .bestiary-detail-card{
+  height:100%;
+}
+.custom-section-detail .bestiary-note-area{
+  overflow-y:auto;
+}
 .bestiary-detail{
   display:flex;flex-direction:column;flex:1;min-height:0;height:auto;
   padding:22px;border:1px solid var(--gold-border);
@@ -758,23 +770,39 @@ body.spectator-mode #main-content { display:none !important; }
   padding:16px 18px;
 }
 @media (min-width: 901px) {
+  /* Cuando el panel-body contiene un grid (bestiario / sección custom)
+     dejamos de hacer scroll en él: el scroll lo gestiona el textarea interno. */
+  .popup-notes.player-notebook-popup .player-notebook-panel-body:has(.bestiary-layout){
+    overflow:hidden;
+  }
   .popup-notes.player-notebook-popup .bestiary-layout{
     display:grid;
     grid-template-columns:minmax(280px,320px) minmax(0,1fr);
+    grid-template-rows:minmax(0,1fr);
     gap:18px;
     align-items:stretch;
+    flex:1;
     min-height:0;
+    /* sin height:100% — flex:1 resuelve el alto correctamente */
   }
   .popup-notes.player-notebook-popup .bestiary-list{
     max-height:none;
-    height:100%;
+    align-self:stretch;
+    overflow-y:auto;
     padding-right:6px;
   }
+  .popup-notes.player-notebook-popup .custom-section-layout,
+  .popup-notes.player-notebook-popup .custom-section-detail,
+  .popup-notes.player-notebook-popup .custom-section-detail .bestiary-detail-card{
+    /* hereda altura del grid; no necesita height:100% explícito */
+    min-height:0;
+  }
   .popup-notes.player-notebook-popup .bestiary-detail{
-    min-height:100%;
-    height:100%;
+    align-self:stretch;
     padding:24px;
     background:rgba(0,0,0,0.2);
+    min-height:0;
+    height:auto;
   }
   .popup-notes.player-notebook-popup .bestiary-detail-card{
     height:100%;
@@ -785,6 +813,10 @@ body.spectator-mode #main-content { display:none !important; }
   .popup-notes.player-notebook-popup .bestiary-note-area{
     min-height:0;
     height:auto;
+  }
+  .popup-notes.player-notebook-popup .custom-section-detail .bestiary-note-area{
+    height:100%;
+    overflow-y:auto;
   }
 }
 
