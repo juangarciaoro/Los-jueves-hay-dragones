@@ -1456,7 +1456,7 @@ input[type=checkbox]{accent-color:var(--gold-light);}
     height:1.05rem;
   }
   .player-notebook-panel{
-    height:auto;
+    flex:1;min-height:0;
   }
   .player-notebook-panel-body{padding-right:2px;}
   .player-notebook-panel-head{
@@ -1546,6 +1546,19 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   .landing-card{padding:28px 14px;min-height:120px;}
   .landing-card .card-icon{font-size:2rem;}
   .landing-card .card-label{font-size:.74rem;}
+  /* I: Notes popup panels fill full height on mobile */
+  .popup-notes.player-notebook-popup .session-popup-body{overflow:hidden;}
+  .popup-notes.player-notebook-popup .dm-notes-panel-wrap,
+  .popup-notes.player-notebook-popup .player-notes-panel-wrap{flex:1;min-height:0;}
+  .popup-notes.player-notebook-popup .player-notebook-panel-body .note-area{flex:1;min-height:0;overflow:auto;}
+  .popup-notes.player-notebook-popup .player-notebook-notes{flex:1;min-height:0;height:100%;}
+  /* I: Bestiary and custom sections fill height on mobile */
+  .popup-notes.player-notebook-popup .player-notebook-panel-body:has(.bestiary-layout){overflow:hidden;}
+  .popup-notes.player-notebook-popup .bestiary-layout{flex:1;min-height:0;display:flex;flex-direction:column;}
+  .popup-notes.player-notebook-popup .bestiary-list{flex:1;min-height:0;overflow-y:auto;}
+  .popup-notes.player-notebook-popup .bestiary-layout.is-detail-view .bestiary-detail{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+  .popup-notes.player-notebook-popup .bestiary-detail-card{flex:1;min-height:0;}
+  .popup-notes.player-notebook-popup .bestiary-note-area{flex:1;min-height:0;overflow:auto;}
 }
 @keyframes modal-up{from{transform:translateY(20px);opacity:.5;}to{transform:translateY(0);opacity:1;}}
 @media (max-width: 380px) {
