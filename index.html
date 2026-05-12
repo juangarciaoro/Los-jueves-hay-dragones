@@ -734,13 +734,9 @@
         <textarea id="af-private" class="note-area" style="min-height:90px" placeholder="Notas internas del DM…"></textarea>
       </div>
       <div class="form-group">
-        <label class="flabel">Imagen (opcional)</label>
-        <div class="acto-img-upload" id="af-img-drop">
-          <input type="file" id="af-image" accept="image/*" style="display:none">
-          <span class="acto-img-placeholder" id="af-img-placeholder"><span data-ui-icon="camera"></span> Clic para subir imagen</span>
-          <img id="af-img-preview" class="acto-img-preview" style="display:none" alt="Vista previa">
-          <button type="button" class="btn btn-outline btn-sm" id="af-img-clear" style="display:none" onclick="clearActoImage()"><span data-ui-icon="close"></span> Quitar</button>
-        </div>
+        <label class="flabel">Imágenes <span id="af-imgs-count" style="font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:1px;color:var(--text-muted)">0 / 10</span></label>
+        <div id="af-imgs-grid" class="acto-imgs-grid"></div>
+        <input type="file" id="af-image" accept="image/*" style="display:none">
       </div>
     </div>
     <div class="modal-footer">

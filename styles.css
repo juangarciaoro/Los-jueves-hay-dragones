@@ -1695,6 +1695,39 @@ input[type=checkbox]{accent-color:var(--gold-light);}
   max-width:100%;max-height:200px;border-radius:var(--radius-sm);
   object-fit:contain;pointer-events:none;
 }
+/* Grid de múltiples imágenes en el modal de acto */
+.acto-imgs-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;}
+.acto-imgs-grid-item{
+  position:relative;width:100px;height:80px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;
+  flex-shrink:0;
+}
+.acto-imgs-grid-item img{
+  width:100%;height:100%;object-fit:cover;cursor:pointer;
+  transition:opacity var(--t);
+}
+.acto-imgs-grid-item img:hover{opacity:.85;}
+.acto-img-remove{
+  position:absolute;top:3px;right:3px;
+  background:rgba(0,0,0,0.65);border:none;border-radius:50%;
+  width:22px;height:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;padding:0;line-height:1;
+  transition:background var(--t);
+}
+.acto-img-remove:hover{background:rgba(170,40,40,0.85);}
+.acto-img-remove .ui-icon{width:.7rem;height:.7rem;}
+.acto-imgs-grid-add{
+  width:100px;height:80px;
+  border:2px dashed var(--border);border-radius:var(--radius-sm);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--text-muted);gap:4px;
+  font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.5px;
+  transition:border-color var(--t),color var(--t);
+  flex-shrink:0;
+}
+.acto-imgs-grid-add:hover{border-color:var(--gold);color:var(--gold);}
+.acto-imgs-grid-add .ui-icon{width:1.1rem;height:1.1rem;}
 /* Miniatura en el acordeón de actos dentro de la vista de sesión */
 .acto-img-thumb{
   width:100%;max-height:160px;object-fit:contain;
