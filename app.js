@@ -55,6 +55,7 @@ let globalUsers = [];
 let currentCampaignId = null;
 let currentUser  = null;
 let _saveTimeout = null;
+let _isLocalWriteInFlight = false;
 let _unsubscribe = null;
 let _usersUnsubscribe = null;
 let _ignoreNext  = false;
@@ -64,6 +65,11 @@ const LOGIN_PENDING_CAMPAIGN_VALUE = '__pending_new_campaign__';
 let pendingLoginCampaignDraft = null;
 let campaignModalMode = 'maintenance';
 let textInputModalResolver = null;
+let _pendingCampaignSnapshot = null;
+let _pendingUsersSnapshot = null;
+let _pendingRealtimeFlushTimer = null;
+let _pendingRealtimeNoticeShown = false;
+let runtimeModalDrafts = {};
 
 function emptyState() {
   return { sessions:[], chars:[], enemies:[], users:[], estados:[], actos:[], eventos:[], playerNotes:{} };
@@ -94,6 +100,264 @@ function normalizeState(data) {
     eventos: data?.eventos || [],
     playerNotes: data?.playerNotes || {}
   };
+}
+
+function isEditableElement(el) {
+  if (!el || !(el instanceof HTMLElement)) return false;
+  if (el.closest('#login-screen') && document.getElementById('login-screen')?.classList.contains('hidden')) return false;
+  if (el.matches('textarea')) return !el.readOnly && !el.disabled;
+  if (el.matches('select')) return !el.disabled;
+  if (el.matches('input')) {
+    const type = (el.getAttribute('type') || 'text').toLowerCase();
+    const nonEditableTypes = new Set(['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'file', 'color', 'hidden']);
+    return !nonEditableTypes.has(type) && !el.readOnly && !el.disabled;
+  }
+  return el.isContentEditable;
+}
+
+function hasOpenModalInteraction() {
+  return !!document.querySelector('.modal-overlay.open');
+}
+
+function hasOpenSessionPopupInteraction() {
+  return Array.from(document.querySelectorAll('.session-popup')).some(popup => popup.style.display !== 'none');
+}
+
+function hasActiveEditableInteraction() {
+  return isEditableElement(document.activeElement);
+}
+
+function hasPendingLocalSaveInteraction() {
+  return !!_saveTimeout || _isLocalWriteInFlight;
+}
+
+function hasBlockingRealtimeInteraction() {
+  return hasOpenModalInteraction()
+    || hasOpenSessionPopupInteraction()
+    || hasActiveEditableInteraction()
+    || hasPendingLocalSaveInteraction();
+}
+
+function schedulePendingRealtimeFlush(delay = 250) {
+  clearTimeout(_pendingRealtimeFlushTimer);
+  if (!_pendingCampaignSnapshot && !_pendingUsersSnapshot) return;
+  _pendingRealtimeFlushTimer = setTimeout(() => {
+    flushPendingRealtimeUpdates();
+  }, delay);
+}
+
+function notifyPendingRealtimeUpdates() {
+  if (_pendingRealtimeNoticeShown) return;
+  _pendingRealtimeNoticeShown = true;
+  showToast('Hay cambios remotos pendientes. Se aplicarán al terminar tu interacción.', 'info');
+}
+
+function queueCampaignRealtimeSnapshot(data) {
+  _pendingCampaignSnapshot = data;
+  notifyPendingRealtimeUpdates();
+  schedulePendingRealtimeFlush();
+}
+
+function queueUsersRealtimeSnapshot(data) {
+  _pendingUsersSnapshot = data;
+  notifyPendingRealtimeUpdates();
+  schedulePendingRealtimeFlush();
+}
+
+function applyUsersRealtimeSnapshot(data) {
+  globalUsers = sanitizeUsers(data.users || []);
+
+  if (currentUser && !globalUsers.find(u => u.id === currentUser.id)) { doLogout(); return; }
+  if (currentUser) currentUser = globalUsers.find(u => u.id === currentUser.id) || currentUser;
+
+  renderUserList();
+  renderCharList();
+  renderCampaignList();
+  renderMaintLanding();
+  applyRoleUI();
+}
+
+function applyCampaignRealtimeSnapshot(data) {
+  state = normalizeState(data);
+  if (migrateCampaignCharLinksFromLegacyUsers()) saveState();
+  if (currentUser && !globalUsers.find(u => u.id === currentUser.id)) { doLogout(); return; }
+  if (currentUser) currentUser = globalUsers.find(u => u.id === currentUser.id) || currentUser;
+  rebuildSessionTabs();
+  renderCharList();
+  renderEnemyList();
+  if (isDM()) {
+    renderUserList(); renderEstadoList(); renderActoList(); renderEventoList(); renderCampaignList();
+    document.querySelectorAll('.view[data-session-id]').forEach(view => {
+      const s = state.sessions.find(x => x.id === view.dataset.sessionId);
+      if (s) renderSessionActos(s, view);
+    });
+  }
+  applyRoleUI();
+  const activeView = document.querySelector('.view.active');
+  const onCharsheet = activeView && activeView.id === 'view-charsheet';
+  const linkedCharId = getLinkedCharIdForUser(currentUser?.id);
+  if (onCharsheet || (!isDM() && linkedCharId)) {
+    const csChar = linkedCharId ? state.chars.find(c => c.id === linkedCharId) : null;
+    if (onCharsheet || csChar) renderCharSheetView(csChar);
+  }
+  const onSessionsList = activeView && activeView.id === 'view-sessions-list';
+  if (onSessionsList) renderActiveSessions();
+  const onMaint = activeView && activeView.id === 'view-maint';
+  if (onMaint) renderSessionList();
+}
+
+function flushPendingRealtimeUpdates() {
+  clearTimeout(_pendingRealtimeFlushTimer);
+  _pendingRealtimeFlushTimer = null;
+  if (hasBlockingRealtimeInteraction()) {
+    schedulePendingRealtimeFlush(400);
+    return;
+  }
+  const pendingUsers = _pendingUsersSnapshot;
+  const pendingCampaign = _pendingCampaignSnapshot;
+  _pendingUsersSnapshot = null;
+  _pendingCampaignSnapshot = null;
+  _pendingRealtimeNoticeShown = false;
+  if (pendingUsers) applyUsersRealtimeSnapshot(pendingUsers);
+  if (pendingCampaign) applyCampaignRealtimeSnapshot(pendingCampaign);
+}
+
+function cloneRuntimeDraft(value) {
+  return value == null ? null : JSON.parse(JSON.stringify(value));
+}
+
+function setRuntimeModalDraft(key, draft) {
+  if (draft == null) {
+    delete runtimeModalDrafts[key];
+    return;
+  }
+  runtimeModalDrafts[key] = cloneRuntimeDraft(draft);
+}
+
+function getRuntimeModalDraft(key) {
+  return cloneRuntimeDraft(runtimeModalDrafts[key]);
+}
+
+function clearRuntimeModalDraft(key) {
+  delete runtimeModalDrafts[key];
+}
+
+function clearPendingRealtimeState() {
+  _pendingCampaignSnapshot = null;
+  _pendingUsersSnapshot = null;
+  _pendingRealtimeNoticeShown = false;
+  clearTimeout(_pendingRealtimeFlushTimer);
+  _pendingRealtimeFlushTimer = null;
+}
+
+function captureRuntimeModalDraft(id) {
+  if (!id) return;
+  if (id === 'modal-char') {
+    const draft = {
+      targetId: editingCharId || null,
+      fields: {},
+      armor: currentArmorSel || '',
+      skills: Object.assign({}, charSkillState),
+      weaponSkills: Object.assign({}, charWeaponSkillState),
+      habs: []
+    };
+    ['name','class','race','align','height','age','pv','pm','gold','skillpts','backpack','notes','player'].forEach(fieldName => {
+      const fieldId = fieldName === 'player' ? 'cf-player' : `cf-${fieldName}`;
+      const fieldEl = document.getElementById(fieldId);
+      if (fieldEl) draft.fields[fieldName] = fieldEl.value || '';
+    });
+    ['fue','int','car','des','vida'].forEach(fieldName => {
+      const fieldEl = document.getElementById(`cf-${fieldName}`);
+      if (fieldEl) draft.fields[fieldName] = fieldEl.value || '';
+    });
+    draft.habs = Array.from(document.querySelectorAll('#cf-habs-list .hab-row')).map(row => ({
+      name: row.querySelector('input')?.value || '',
+      desc: row.querySelector('textarea')?.value || '',
+      level: charHabState[row.dataset.habId] || 0
+    }));
+    setRuntimeModalDraft('char', draft);
+    return;
+  }
+  if (id === 'modal-enemy') {
+    setRuntimeModalDraft('enemy', {
+      targetId: editingEnemyId || null,
+      armor: currentEnemyArmorSel || '',
+      fields: {
+        name: document.getElementById('ef-name')?.value || '',
+        attacks: document.getElementById('ef-attacks')?.value || '',
+        notes: document.getElementById('ef-notes')?.value || '',
+        pv: document.getElementById('ef-pv')?.value || '',
+        fue: document.getElementById('ef-fue')?.value || '',
+        int: document.getElementById('ef-int')?.value || '',
+        car: document.getElementById('ef-car')?.value || '',
+        des: document.getElementById('ef-des')?.value || ''
+      }
+    });
+    return;
+  }
+  if (id === 'modal-acto') {
+    setRuntimeModalDraft('acto', {
+      targetId: editingActoId || null,
+      sessionId: document.getElementById('af-session')?.value || '',
+      title: document.getElementById('af-title')?.value || '',
+      public: document.getElementById('af-public')?.value || '',
+      private: document.getElementById('af-private')?.value || '',
+      image: _editingActoImage || null
+    });
+    return;
+  }
+  if (id === 'modal-evento') {
+    setRuntimeModalDraft('evento', {
+      targetId: editingEventoId || null,
+      sessionId: document.getElementById('ef2-session')?.value || '',
+      actoId: document.getElementById('ef2-acto')?.value || '',
+      categoria: document.getElementById('ef2-cat')?.value || 'Tensión',
+      title: document.getElementById('ef2-title')?.value || '',
+      public: document.getElementById('ef2-public')?.value || '',
+      private: document.getElementById('ef2-private')?.value || ''
+    });
+    return;
+  }
+  if (id === 'modal-campaign') {
+    setRuntimeModalDraft('campaign', {
+      targetId: editingCampaignId || null,
+      mode: campaignModalMode || 'maintenance',
+      name: document.getElementById('camp-name')?.value || '',
+      dmUserId: document.getElementById('camp-dm-user')?.value || '',
+      cloneCurrent: !!document.getElementById('camp-clone-current')?.checked
+    });
+    return;
+  }
+  if (id === 'modal-text-input') {
+    const fieldEl = document.getElementById('modal-text-input-field');
+    if (!fieldEl) return;
+    setRuntimeModalDraft('text-input', {
+      signature: fieldEl.dataset.signature || '',
+      value: fieldEl.value || ''
+    });
+    return;
+  }
+  if (id === 'modal-prepare-combats') {
+    setRuntimeModalDraft('prepare-combats', {
+      sessionId: _prepareCombatsSessionId || null,
+      selectedEnemyIds: [..._prepareCombatsSelected]
+    });
+    return;
+  }
+  if (id === 'modal-cond') {
+    const input = document.getElementById('cond-input');
+    if (!input) return;
+    setRuntimeModalDraft('cond', {
+      value: input.value || ''
+    });
+    return;
+  }
+  if (id === 'modal-hp') {
+    setRuntimeModalDraft('hp', {
+      amount: document.getElementById('hp-amount-in')?.value || '',
+      tempAmount: document.getElementById('temp-hp-amount-in')?.value || ''
+    });
+  }
 }
 
 // Normaliza el cuaderno del jugador conservando compatibilidad con el formato legado
@@ -667,6 +931,35 @@ function renderDMNotebook(clone, session) {
 
   clone._openDMNotebookMenu = () => openMenu();
   clone._resetDMNotebookState = () => openMenu();
+  clone._getDMNotebookState = () => ({
+    activePanel,
+    activeCustomSectionId,
+    activeCustomEntryId,
+    activeCharsheetCharId,
+    customSectionFilter
+  });
+  clone._restoreDMNotebookState = uiState => {
+    if (!uiState) {
+      openMenu();
+      return;
+    }
+    activeCustomSectionId = uiState.activeCustomSectionId || null;
+    activeCustomEntryId = uiState.activeCustomEntryId || null;
+    activeCharsheetCharId = uiState.activeCharsheetCharId || null;
+    customSectionFilter = uiState.customSectionFilter || '';
+    if (customSectionSearch) customSectionSearch.value = customSectionFilter;
+    renderNotebookMenu();
+    if (!uiState.activePanel) {
+      openMenu();
+      return;
+    }
+    if (uiState.activePanel === 'custom' && activeCustomSectionId) {
+      openCustomSection(activeCustomSectionId);
+      if (activeCustomEntryId && window.matchMedia('(max-width: 600px)').matches) showCustomSectionDetailView();
+      return;
+    }
+    openSection(uiState.activePanel);
+  };
   clone._refreshDMNotebook = () => {
     renderNotebookMenu();
     if (activePanel === 'custom') renderCustomSection();
@@ -949,6 +1242,7 @@ function renderPlayerNotebook(clone, session) {
   function renderBestiaryList() {
     if (!bestiaryList) return;
 
+    const listScrollTop = bestiaryList.scrollTop;
     bestiaryList.innerHTML = '';
     if (bestiaryPagination) bestiaryPagination.innerHTML = '';
     if (!state.enemies.length) {
@@ -1005,6 +1299,8 @@ function renderPlayerNotebook(clone, session) {
       bestiaryList.appendChild(button);
     });
 
+    bestiaryList.scrollTop = listScrollTop;
+
     renderBestiaryDetail();
   }
 
@@ -1013,11 +1309,22 @@ function renderPlayerNotebook(clone, session) {
 
     const notebook = getNotebook();
     const slots = normalizeNotebookInventory(notebook.inventory);
+    const activeInventoryInput = inventoryGrid.querySelector('.inventory-slot input:focus');
+    const activeInventorySlot = activeInventoryInput?.closest('.inventory-slot');
+    const activeInventoryState = activeInventorySlot ? {
+      slotIndex: Array.from(inventoryGrid.querySelectorAll('.inventory-slot')).indexOf(activeInventorySlot),
+      field: activeInventoryInput.classList.contains('inventory-qty-input') ? 'qty' : 'name',
+      value: activeInventoryInput.value,
+      selectionStart: typeof activeInventoryInput.selectionStart === 'number' ? activeInventoryInput.selectionStart : null,
+      selectionEnd: typeof activeInventoryInput.selectionEnd === 'number' ? activeInventoryInput.selectionEnd : null,
+      scrollTop: inventoryGrid.scrollTop
+    } : null;
 
     inventoryGrid.innerHTML = '';
     slots.forEach((item, index) => {
       const slot = document.createElement('div');
       slot.className = 'inventory-slot';
+      slot.dataset.slotIndex = String(index);
       slot.innerHTML = `
         <input type="text" class="form-input inventory-name-input" placeholder="Objeto" value="${escapeHtml(item.name)}">
         <div class="inventory-qty-row">
@@ -1067,6 +1374,18 @@ function renderPlayerNotebook(clone, session) {
 
       inventoryGrid.appendChild(slot);
     });
+
+    if (activeInventoryState) {
+      const nextSlot = inventoryGrid.querySelector(`.inventory-slot[data-slot-index="${activeInventoryState.slotIndex}"]`);
+      const nextInput = nextSlot?.querySelector(activeInventoryState.field === 'qty' ? '.inventory-qty-input' : '.inventory-name-input');
+      if (nextInput) {
+        nextInput.focus({ preventScroll: true });
+        if (typeof activeInventoryState.selectionStart === 'number' && typeof activeInventoryState.selectionEnd === 'number') {
+          nextInput.setSelectionRange(activeInventoryState.selectionStart, activeInventoryState.selectionEnd);
+        }
+      }
+      if (Number.isFinite(activeInventoryState.scrollTop)) inventoryGrid.scrollTop = activeInventoryState.scrollTop;
+    }
   }
 
   function renderCustomSectionDetail() {
@@ -1112,6 +1431,7 @@ function renderPlayerNotebook(clone, session) {
 
     const notebook = getNotebook();
     const section = getActiveCustomSection(notebook);
+    const listScrollTop = customSectionList.scrollTop;
     customSectionList.innerHTML = '';
 
     if (!section) {
@@ -1174,6 +1494,8 @@ function renderPlayerNotebook(clone, session) {
       });
       customSectionList.appendChild(item);
     });
+
+    customSectionList.scrollTop = listScrollTop;
 
     renderCustomSectionDetail();
   }
@@ -1300,6 +1622,48 @@ function renderPlayerNotebook(clone, session) {
   clone._openPlayerBestiaryEnemy = enemyId => openBestiaryEnemy(enemyId);
   clone._openPlayerNotebookMenu = () => openNotebookMenu();
   clone._resetPlayerNotebookState = () => openNotebookMenu();
+  clone._getPlayerNotebookState = () => ({
+    activeBestiaryEnemyId,
+    bestiaryFilter,
+    bestiaryPage,
+    activeCustomSectionId,
+    activeCustomEntryId,
+    customSectionFilter,
+    activeNotebookPanel
+  });
+  clone._restorePlayerNotebookState = uiState => {
+    if (!uiState) {
+      openNotebookMenu();
+      return;
+    }
+    activeBestiaryEnemyId = uiState.activeBestiaryEnemyId || null;
+    bestiaryFilter = uiState.bestiaryFilter || '';
+    bestiaryPage = uiState.bestiaryPage || 1;
+    activeCustomSectionId = uiState.activeCustomSectionId || null;
+    activeCustomEntryId = uiState.activeCustomEntryId || null;
+    customSectionFilter = uiState.customSectionFilter || '';
+    activeNotebookPanel = uiState.activeNotebookPanel || null;
+    if (bestiarySearch) bestiarySearch.value = bestiaryFilter;
+    if (customSectionSearch) customSectionSearch.value = customSectionFilter;
+    renderNotebookMenu();
+    if (!activeNotebookPanel) {
+      openNotebookMenu();
+      return;
+    }
+    if (activeNotebookPanel === 'bestiary') {
+      openNotebookSection('bestiary');
+      renderBestiaryList();
+      renderBestiaryDetail();
+      if (activeBestiaryEnemyId && isNotebookMobile()) showBestiaryDetailView();
+      return;
+    }
+    if (activeNotebookPanel === 'custom' && activeCustomSectionId) {
+      openCustomSection(activeCustomSectionId);
+      if (activeCustomEntryId && isNotebookMobile()) showCustomSectionDetailView();
+      return;
+    }
+    openNotebookSection(activeNotebookPanel);
+  };
   clone._refreshPlayerNotebookCharSheet = () => renderNotebookCharsheet();
   updateNotebookPopupTitle();
   renderNotebookMenu();
@@ -1499,16 +1863,11 @@ function startUsersRealtimeSync() {
   _usersUnsubscribe = onSnapshot(APP_USERS_DOC, snap => {
     if (!snap.exists()) return;
     const data = snap.data();
-    globalUsers = sanitizeUsers(data.users || []);
-
-    if (currentUser && !globalUsers.find(u => u.id === currentUser.id)) { doLogout(); return; }
-    if (currentUser) currentUser = globalUsers.find(u => u.id === currentUser.id) || currentUser;
-
-    renderUserList();
-    renderCharList();
-    renderCampaignList();
-    renderMaintLanding();
-    applyRoleUI();
+    if (hasBlockingRealtimeInteraction()) {
+      queueUsersRealtimeSnapshot(data);
+      return;
+    }
+    applyUsersRealtimeSnapshot(data);
   }, err => {
     console.error('Users onSnapshot error:', err);
   });
@@ -1589,6 +1948,28 @@ function renderCampaignSelect() {
   applyCampaignBranding();
 }
 
+function renderHeaderCampaignSelect() {
+  const sel = document.getElementById('header-campaign');
+  if (!sel) return;
+  sel.innerHTML = '';
+
+  campaigns.forEach(c => {
+    const option = document.createElement('option');
+    option.value = c.id;
+    option.textContent = c.archived ? `${c.name} [Archivada]` : c.name;
+    sel.appendChild(option);
+  });
+
+  const current = currentCampaignId || sessionStorage.getItem('ljhd_campaign') || '';
+  if (current && campaigns.some(c => c.id === current)) {
+    sel.value = current;
+  } else if (campaigns[0]?.id) {
+    sel.value = campaigns[0].id;
+  }
+
+  sel.disabled = !currentUser;
+}
+
 function getCurrentCampaignName() {
   const c = campaigns.find(x => x.id === currentCampaignId);
   return c ? c.name : '—';
@@ -1656,12 +2037,23 @@ function saveState() {
   const stateDoc = getCurrentStateDoc();
   clearTimeout(_saveTimeout);
   setSaveIndicator('saving');
+  const payload = JSON.parse(JSON.stringify(state));
   _saveTimeout = setTimeout(async () => {
+    _saveTimeout = null;
+    _isLocalWriteInFlight = true;
     try {
       _ignoreNext = true;
-      await setDoc(stateDoc, JSON.parse(JSON.stringify(state)));
+      _pendingCampaignSnapshot = null;
+      await setDoc(stateDoc, payload);
       setSaveIndicator('saved');
-    } catch(e) { console.error('Firestore write:', e); setSaveIndicator(''); }
+    } catch(e) {
+      console.error('Firestore write:', e);
+      setSaveIndicator('');
+      showToast('Error al guardar. Comprueba la conexión.', 'error');
+    } finally {
+      _isLocalWriteInFlight = false;
+      schedulePendingRealtimeFlush(0);
+    }
   }, 1500);
 }
 
@@ -1698,6 +2090,7 @@ async function loadState(campaignId) {
   } catch(e) { console.error('Firestore read:', e); }
   const badge = document.getElementById('campaign-badge');
   if (badge) badge.textContent = getCurrentCampaignName();
+  renderHeaderCampaignSelect();
   applyCampaignBranding();
   showLoadingOverlay(false);
 }
@@ -1714,35 +2107,12 @@ function startRealtimeSync() {
     // Saltamos el eco de nuestro propio setDoc para evitar re-renderizados redundantes
     if (_ignoreNext) { _ignoreNext = false; return; }
     if (!snap.exists()) return;
-    state = normalizeState(snap.data());
-    if (migrateCampaignCharLinksFromLegacyUsers()) saveState();
-    if (currentUser && !globalUsers.find(u => u.id === currentUser.id)) { doLogout(); return; }
-    if (currentUser) currentUser = globalUsers.find(u => u.id === currentUser.id) || currentUser;
-    rebuildSessionTabs();
-    renderCharList();
-    renderEnemyList();
-    if (isDM()) {
-      renderUserList(); renderEstadoList(); renderActoList(); renderEventoList(); renderCampaignList();
-      document.querySelectorAll('.view[data-session-id]').forEach(view => {
-        const s = state.sessions.find(x => x.id === view.dataset.sessionId);
-        if (s) renderSessionActos(s, view);
-      });
+    const data = snap.data();
+    if (hasBlockingRealtimeInteraction()) {
+      queueCampaignRealtimeSnapshot(data);
+      return;
     }
-    applyRoleUI();
-    // Re-render charsheet: if currently visible OR if player (charsheet is their home)
-    const activeView = document.querySelector('.view.active');
-    const onCharsheet = activeView && activeView.id === 'view-charsheet';
-    const linkedCharId = getLinkedCharIdForUser(currentUser?.id);
-    if (onCharsheet || (!isDM() && linkedCharId)) {
-      const csChar = linkedCharId ? state.chars.find(c => c.id === linkedCharId) : null;
-      if (onCharsheet || csChar) renderCharSheetView(csChar);
-    }
-    // Render active sessions if that view is visible
-    const onSessionsList = activeView && activeView.id === 'view-sessions-list';
-    if (onSessionsList) renderActiveSessions();
-    // Update session list in maintenance if visible
-    const onMaint = activeView && activeView.id === 'view-maint';
-    if (onMaint) renderSessionList();
+    applyCampaignRealtimeSnapshot(data);
   }, err => {
     console.error('Firestore onSnapshot error:', err);
   });
@@ -1867,6 +2237,8 @@ async function doLogin() {
 function doLogout() {
   if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
   if (_usersUnsubscribe) { _usersUnsubscribe(); _usersUnsubscribe = null; }
+  clearPendingRealtimeState();
+  runtimeModalDrafts = {};
   sessionStorage.removeItem('ljhd_campaign');
   sessionStorage.removeItem('ljhd_user');
   currentUser = null;
@@ -1877,6 +2249,7 @@ function doLogout() {
   document.getElementById('login-error').textContent = '';
   const campaignSel = document.getElementById('login-campaign');
   if (campaignSel) campaignSel.value = campaigns.find(c => !c.archived)?.id || '';
+  renderHeaderCampaignSelect();
   const campaignBadge = document.getElementById('campaign-badge');
   if (campaignBadge) campaignBadge.textContent = '—';
   applyCampaignBranding();
@@ -1902,6 +2275,8 @@ function applyRoleUI() {
 
   // DM-only controls
   document.querySelectorAll('.dm-only-ctrl').forEach(el => { el.style.display = dm ? '' : 'none'; });
+  const headerCampaign = document.getElementById('header-campaign');
+  if (headerCampaign) headerCampaign.disabled = !currentUser;
 
   // Legacy tabs may not exist after navigation refactor
   const maintTab = document.getElementById('tab-maint');
@@ -2329,6 +2704,7 @@ function toggleEditEnemy(enemyId) {
 function rebuildSessionTabs() {
   const activeView = document.querySelector('#main-content .view.active');
   const activeId = activeView ? (activeView.dataset.sessionId || activeView.id.replace('view-', '')) : null;
+  const activeSessionUIState = activeView?._getSessionUIState?.() || null;
   // Don't restore if currently on landing/main menus (or if no activeId)
   const isMenuView = !activeId || activeId === 'landing' || activeId === 'sessions-list' || activeId === 'maint' || activeId === 'charsheet';
 
@@ -2347,6 +2723,7 @@ function rebuildSessionTabs() {
     if (restoredView) {
       document.querySelectorAll('#main-content .view').forEach(v => v.classList.remove('active'));
       restoredView.classList.add('active');
+      restoredView._restoreSessionUIState?.(activeSessionUIState);
       updateBreadcrumbs(activeId);
     }
   }
@@ -2446,7 +2823,10 @@ function openPrepareCombatsModal(sessionId) {
   const session = state.sessions.find(s => s.id === sessionId);
   if (!session) return;
   _prepareCombatsSessionId = sessionId;
-  _prepareCombatsSelected  = new Set(session.allowedEnemies || []);
+  const draft = getRuntimeModalDraft('prepare-combats');
+  _prepareCombatsSelected  = draft?.sessionId === sessionId
+    ? new Set(draft.selectedEnemyIds || [])
+    : new Set(session.allowedEnemies || []);
 
   const title = document.getElementById('modal-prepare-combats-title');
   if (title) title.innerHTML = `${UI_ICONS.sword} Preparar Combates — ${session.name}`;
@@ -2497,6 +2877,7 @@ function savePrepareCombats() {
   session.allowedEnemies = [..._prepareCombatsSelected];
   saveState();
   closeModal('modal-prepare-combats');
+  clearRuntimeModalDraft('prepare-combats');
   showToast('Combates guardados', 'success');
   // Refresh chips in any open session view
   const container = document.getElementById('view-' + session.id);
@@ -2601,6 +2982,7 @@ function buildSessionView(session) {
     btn.classList.remove('active');
     if (dm && popup === notesPopup) clone._resetDMNotebookState?.();
     if (!dm && popup === notesPopup) clone._resetPlayerNotebookState?.();
+    schedulePendingRealtimeFlush();
   }
   if (notesBtn && notesPopup) {
     notesBtn.addEventListener('click', () => {
@@ -2699,6 +3081,31 @@ function buildSessionView(session) {
     const spectatorBtn = clone.querySelector('.btn-spectator');
     if (spectatorBtn) spectatorBtn.addEventListener('click', () => openSpectatorWindow(session.id));
   }
+  clone._getSessionUIState = () => {
+    const openActoTitle = dm
+      ? Array.from(clone.querySelectorAll('.actos-accordion .acto-item')).find(item => item.querySelector('.acto-body')?.style.display !== 'none')?.querySelector('.acto-title')?.textContent?.trim() || null
+      : null;
+    return {
+      notesPopupOpen: !!notesPopup && notesPopup.style.display !== 'none',
+      dicePopupOpen: !!dicePopup && dicePopup.style.display !== 'none',
+      notebookState: dm ? clone._getDMNotebookState?.() : clone._getPlayerNotebookState?.(),
+      openActoTitle
+    };
+  };
+  clone._restoreSessionUIState = uiState => {
+    if (!uiState) return;
+    if (uiState.notebookState) {
+      if (dm) clone._restoreDMNotebookState?.(uiState.notebookState);
+      else clone._restorePlayerNotebookState?.(uiState.notebookState);
+    }
+    if (uiState.notesPopupOpen && notesPopup && notesBtn) openPopup(notesPopup, notesBtn);
+    if (uiState.dicePopupOpen && dicePopup && diceBtn) openPopup(dicePopup, diceBtn);
+    if (dm && uiState.openActoTitle) {
+      const actoHeader = Array.from(clone.querySelectorAll('.actos-accordion .acto-header'))
+        .find(header => header.querySelector('.acto-title')?.textContent?.trim() === uiState.openActoTitle);
+      actoHeader?.click();
+    }
+  };
   renderSessionGallery(session, clone);
   document.getElementById('main-content').appendChild(clone);
 }
@@ -2958,7 +3365,15 @@ function renderCombatantChips(clone, session) {
     chip.textContent = enemy.name;
     chip.onclick = () => {
       const rndInit = Math.ceil(Math.random() * 20);
-      session.combatants.push({ id:uid(), name:enemy.name, enemyId:enemy.id, init:rndInit, hp:enemy.pv||10, maxHp:enemy.pv||10, tempHp:0, type:'enemy', dead:false, conditions:[] });
+      const sameType = session.combatants.filter(c => c.type === 'enemy' && c.enemyId === enemy.id);
+      if (sameType.length === 1 && sameType[0].name === enemy.name) {
+        // When a second unit of the same type is added, the first becomes "Name 1".
+        sameType[0].name = `${enemy.name} 1`;
+      }
+      const enemyName = sameType.length === 0
+        ? enemy.name
+        : `${enemy.name} ${getNextEnemyOrdinal(session, enemy)}`;
+      session.combatants.push({ id:uid(), name:enemyName, enemyId:enemy.id, init:rndInit, hp:enemy.pv||10, maxHp:enemy.pv||10, tempHp:0, type:'enemy', dead:false, conditions:[] });
       registerEncounteredEnemy(enemy.id);
       session.combatants.sort((a,b) => b.init - a.init);
       saveState();
@@ -2966,6 +3381,29 @@ function renderCombatantChips(clone, session) {
     };
     enWrap.appendChild(chip);
   });
+}
+
+function parseEnemyOrdinal(name, enemyName) {
+  const escaped = enemyName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(name || '').match(new RegExp(`^${escaped}\\s+(\\d+)$`));
+  if (!match) return null;
+  const ordinal = parseInt(match[1], 10);
+  return Number.isFinite(ordinal) && ordinal > 0 ? ordinal : null;
+}
+
+function getNextEnemyOrdinal(session, enemy) {
+  const used = new Set();
+  session.combatants
+    .filter(c => c.type === 'enemy' && c.enemyId === enemy.id)
+    .forEach(c => {
+      const ordinal = parseEnemyOrdinal(c.name, enemy.name);
+      if (ordinal) used.add(ordinal);
+      else if (c.name === enemy.name) used.add(1);
+    });
+
+  let next = 1;
+  while (used.has(next)) next++;
+  return next;
 }
 
 function addCombatantToSession(session, clone) {
@@ -2979,6 +3417,44 @@ function addCombatantToSession(session, clone) {
   renderCombatantList(session, clone);
 }
 
+function getCombatantListUIState(clone) {
+  const list = clone.querySelector('.combatant-list');
+  if (!list) return null;
+  const focusedInitInput = list.querySelector('.c-init-input:focus');
+  const focusedCard = focusedInitInput?.closest('.combatant-card');
+  const tooltip = document.getElementById('enemy-stat-tooltip');
+  return {
+    scrollTop: list.scrollTop,
+    focusedCombatantId: focusedCard?.dataset.combatantId || null,
+    focusedInitValue: focusedInitInput?.value || '',
+    focusedInitSelectionStart: typeof focusedInitInput?.selectionStart === 'number' ? focusedInitInput.selectionStart : null,
+    focusedInitSelectionEnd: typeof focusedInitInput?.selectionEnd === 'number' ? focusedInitInput.selectionEnd : null,
+    tooltipEnemyId: tooltip?.classList.contains('visible') ? (tooltip.dataset.enemyId || null) : null
+  };
+}
+
+function restoreCombatantListUIState(clone, uiState) {
+  if (!uiState) return;
+  const list = clone.querySelector('.combatant-list');
+  if (list && Number.isFinite(uiState.scrollTop)) list.scrollTop = uiState.scrollTop;
+
+  if (uiState.focusedCombatantId) {
+    const nextInput = clone.querySelector(`.combatant-card[data-combatant-id="${uiState.focusedCombatantId}"] .c-init-input`);
+    if (nextInput) {
+      nextInput.value = uiState.focusedInitValue || nextInput.value;
+      nextInput.focus({ preventScroll: true });
+      if (typeof uiState.focusedInitSelectionStart === 'number' && typeof uiState.focusedInitSelectionEnd === 'number') {
+        nextInput.setSelectionRange(uiState.focusedInitSelectionStart, uiState.focusedInitSelectionEnd);
+      }
+    }
+  }
+
+  if (uiState.tooltipEnemyId) {
+    const nextInfoBtn = clone.querySelector(`.combatant-card[data-enemy-id="${uiState.tooltipEnemyId}"] .enemy-info-btn`);
+    if (nextInfoBtn && isDM()) showEnemyTooltip(uiState.tooltipEnemyId, nextInfoBtn);
+  }
+}
+
 // Renderiza la lista de tarjetas de iniciativa.
 // - Jugadores solo ven HP de sus propios personajes (type==='pj' && charId === suyo).
 // - El turno activo (activeTurn sobre vivos) resalta con clase .active-turn.
@@ -2987,6 +3463,7 @@ function addCombatantToSession(session, clone) {
 function renderCombatantList(session, clone) {
   const dm = isDM();
   const list = clone.querySelector('.combatant-list');
+  const combatantListUIState = getCombatantListUIState(clone);
   list.innerHTML = '';
   const cards = [];
   const alive = session.combatants.filter(c => !c.dead);
@@ -2999,15 +3476,23 @@ function renderCombatantList(session, clone) {
     const card = document.createElement('div');
     const typeClass = c.type === 'pj' ? ' type-pj' : c.type === 'enemy' ? ' type-enemy' : '';
     card.className = 'combatant-card' + typeClass + (isActive?' active-turn':'') + (c.dead?' dead':'');
-    // Players: see HP of PJs but NOT enemies
+    card.dataset.combatantId = c.id;
+    if (c.enemyId) card.dataset.enemyId = c.enemyId;
+    // Players keep HP bars for characters, but see damage dealt text for enemies.
     const showHp = dm || c.type === 'pj';
     const hpDisplay = c.tempHp > 0 ? `${c.hp} + ${c.tempHp}T / ${c.maxHp}` : `${c.hp} / ${c.maxHp}`;
-    const hpHtml = showHp
-      ? `<div class="hp-bar-wrap">
+    let hpHtml = '';
+    if (showHp) {
+      hpHtml = `<div class="hp-bar-wrap">
           <div class="hp-bar-track"><div class="hp-bar-fill ${barClass}" style="width:${pct}%"></div></div>
           <div class="hp-text">${hpDisplay}</div>
-        </div>`
-      : `<div class="hp-bar-wrap"><div class="hp-text" style="font-style:italic;opacity:.5">—</div></div>`;
+        </div>`;
+    } else if (c.type === 'enemy') {
+      const damagePoints = Math.max(0, (parseInt(c.maxHp, 10) || 0) - (parseInt(c.hp, 10) || 0));
+      hpHtml = `<div class="hp-bar-wrap"><div class="hp-text" style="text-align:left">Puntos de daño: ${damagePoints}</div></div>`;
+    } else {
+      hpHtml = `<div class="hp-bar-wrap"><div class="hp-text" style="font-style:italic;opacity:.5">—</div></div>`;
+    }
     const currentCharId = getLinkedCharIdForUser(currentUser?.id);
     const isOwnChar = !dm && c.type === 'pj' && currentCharId && c.charId === currentCharId;
     const canControl = dm || isOwnChar;
@@ -3102,6 +3587,7 @@ function renderCombatantList(session, clone) {
     list.classList.remove('multi-col');
     cards.forEach(c => list.appendChild(c));
   }
+  restoreCombatantListUIState(clone, combatantListUIState);
   // Refresh chips so disabled state of PJ chips stays accurate
   renderCombatantChips(clone, session);
 }
@@ -3130,6 +3616,7 @@ function showEnemyTooltip(enemyId, anchor) {
   tip.querySelector('.est-int').textContent = enemy.int ?? '—';
   tip.querySelector('.est-car').textContent = enemy.car ?? '—';
   tip.querySelector('.est-des').textContent = enemy.des ?? '—';
+  tip.dataset.enemyId = enemyId;
 
   const attacksWrap = tip.querySelector('.est-attacks-wrap');
   const attacksEl   = tip.querySelector('.est-attacks');
@@ -3143,20 +3630,32 @@ function showEnemyTooltip(enemyId, anchor) {
   notesEl.textContent = notes;
   notesWrap.style.display = notes ? '' : 'none';
 
-  // Position near anchor
+  // Position near anchor and keep tooltip fully visible inside viewport bounds.
   const rect = anchor.getBoundingClientRect();
-  const tipW = 280;
+  const tipMaxW = 280;
   const margin = 8;
-  let left = rect.right + margin;
-  if (left + tipW > window.innerWidth - margin) left = rect.left - tipW - margin;
-  if (left < margin) left = margin;
-  let top = rect.top;
-  tip.style.left = left + 'px';
-  tip.style.top  = top + 'px';
-  tip.style.maxWidth = tipW + 'px';
+  tip.style.maxWidth = tipMaxW + 'px';
 
   tip.removeAttribute('aria-hidden');
   tip.classList.add('visible');
+
+  // Measure after making it visible to use real dimensions and avoid clipped content.
+  const tipRect = tip.getBoundingClientRect();
+  const tipW = Math.min(tipRect.width || tipMaxW, window.innerWidth - margin * 2);
+  const tipH = tipRect.height || 0;
+
+  const rightX = rect.right + margin;
+  const leftX = rect.left - tipW - margin;
+  let left = (rightX + tipW <= window.innerWidth - margin) ? rightX : leftX;
+  left = Math.max(margin, Math.min(left, window.innerWidth - tipW - margin));
+
+  // Prefer aligning with anchor top, then clamp to viewport; if needed, anchor from bottom.
+  let top = rect.top;
+  if (top + tipH > window.innerHeight - margin) top = rect.bottom - tipH;
+  top = Math.max(margin, Math.min(top, window.innerHeight - tipH - margin));
+
+  tip.style.left = `${left}px`;
+  tip.style.top  = `${top}px`;
 
   // Keep visible when hovering the tooltip itself
   tip.onmouseenter = () => clearTimeout(_tooltipHideTimer);
@@ -3173,6 +3672,7 @@ function hideEnemyTooltip() {
   if (!tip) return;
   tip.classList.remove('visible');
   tip.setAttribute('aria-hidden', 'true');
+  delete tip.dataset.enemyId;
 }
 
 // ===========================
@@ -3187,9 +3687,10 @@ function openHpModal(session, idx, clone) {
   const c = session.combatants[idx];
   document.getElementById('modal-hp-title').textContent = `PV — ${c.name}`;
   document.getElementById('hp-current-display').textContent = `${c.hp} / ${c.maxHp}`;
+  const draft = getRuntimeModalDraft('hp');
   document.getElementById('temp-hp-display').textContent = c.tempHp || 0;
-  document.getElementById('hp-amount-in').value = 1;
-  document.getElementById('temp-hp-amount-in').value = c.tempHp || 0;
+  document.getElementById('hp-amount-in').value = draft?.amount || 1;
+  document.getElementById('temp-hp-amount-in').value = draft?.tempAmount || c.tempHp || 0;
   openModal('modal-hp');
 }
 // Aplica daño o curación al combatiente referenciado en hpRef.
@@ -3245,7 +3746,8 @@ function setTempHP() {
 let condRef = null;
 function openCondModal(session, idx, clone) {
   condRef = {session, idx, clone};
-  document.getElementById('cond-input').value = '';
+  const draft = getRuntimeModalDraft('cond');
+  document.getElementById('cond-input').value = draft?.value || '';
   renderCondChips();
   openModal('modal-cond');
 }
@@ -3271,6 +3773,7 @@ function addConditionConfirm() {
   const v = document.getElementById('cond-input').value.trim();
   if (v) { session.combatants[idx].conditions.push(v); saveState(); }
   closeModal('modal-cond');
+  clearRuntimeModalDraft('cond');
   renderCombatantList(session, clone);
 }
 
@@ -3335,6 +3838,7 @@ let _editingActoImages = []; // array de base64, máx 10 imágenes del acto en e
 function renderActoList() {
   const list = document.getElementById('acto-list');
   if (!list) return;
+  const treeViewUIState = getTreeViewUIState(list);
   list.innerHTML = '';
   if (state.actos.length === 0 && state.sessions.length === 0) {
     list.innerHTML = '<div class="empty-state">No hay actos definidos.</div>';
@@ -3357,6 +3861,7 @@ function renderActoList() {
     // Session node
     const sessionNode = document.createElement('div');
     sessionNode.className = 'tree-session';
+    sessionNode.dataset.treeKey = `session:${sid}`;
     const sessionHeader = document.createElement('div');
     sessionHeader.className = 'tree-session-header';
     sessionHeader.innerHTML = `<span class="tree-toggle">▾</span><span class="tree-session-name">${session ? session.name : sid}</span><span class="tree-count">${actos.length} acto${actos.length !== 1 ? 's' : ''}</span>`;
@@ -3389,9 +3894,13 @@ function renderActoList() {
     sessionNode.appendChild(childWrap);
     list.appendChild(sessionNode);
   });
+
+  restoreTreeViewUIState(list, treeViewUIState);
 }
 
 function openActoModal(id, preSessionId) {
+  const draft = getRuntimeModalDraft('acto');
+  const shouldRestoreDraft = draft && draft.targetId === (id || null);
   editingActoId = id || null;
   const a = id ? state.actos.find(x => x.id === id) : null;
   document.getElementById('modal-acto-title').textContent = id ? 'Editar Acto' : 'Nuevo Acto';
@@ -3401,16 +3910,26 @@ function openActoModal(id, preSessionId) {
   state.sessions.forEach(s => {
     const o = document.createElement('option');
     o.value = s.id; o.textContent = s.name;
-    const selId = a ? a.sessionId : preSessionId;
+    const selId = shouldRestoreDraft ? (draft.sessionId || preSessionId) : (a ? a.sessionId : preSessionId);
     if (selId === s.id) o.selected = true;
     sel.appendChild(o);
   });
-  document.getElementById('af-title').value = a ? a.title : '';
-  document.getElementById('af-public').value = a ? (a.public || '') : '';
-  document.getElementById('af-private').value = a ? (a.private || '') : '';
-  // Imágenes (hasta 10): retrocompatibilidad con campo image singular
-  _editingActoImages = a?.images ? [...a.images] : (a?.image ? [a.image] : []);
+  document.getElementById('af-title').value = shouldRestoreDraft ? (draft.title || '') : (a ? a.title : '');
+  document.getElementById('af-public').value = shouldRestoreDraft ? (draft.public || '') : (a ? (a.public || '') : '');
+  document.getElementById('af-private').value = shouldRestoreDraft ? (draft.private || '') : (a ? (a.private || '') : '');
+  // Imagen
+  const _preview   = document.getElementById('af-img-preview');
+  const _pholder   = document.getElementById('af-img-placeholder');
+  const _clearBtn  = document.getElementById('af-img-clear');
   const _fileInput = document.getElementById('af-image');
+  _editingActoImage = shouldRestoreDraft ? (draft.image || null) : (a?.image || null);
+  if (_editingActoImage) {
+    _preview.src = _editingActoImage; _preview.style.display = '';
+    _pholder.style.display = 'none';  _clearBtn.style.display = '';
+  } else {
+    _preview.src = ''; _preview.style.display = 'none';
+    _pholder.style.display = '';      _clearBtn.style.display = 'none';
+  }
   _fileInput.value = '';
   _fileInput.onchange = handleActoImageSelect;
   renderActoImgsGrid();
@@ -3432,10 +3951,18 @@ function saveActo() {
     const idx = state.actos.findIndex(a => a.id === editingActoId);
     if (idx !== -1) {
       // Retirar del diario las imágenes que ya no están en el acto
+      const oldActo = state.actos[idx];
       const newSrcs = new Set(obj.images);
       state.sessions.forEach(s => {
         if (s.publishedImages)
-          s.publishedImages = s.publishedImages.filter(i => i.actoId !== editingActoId || newSrcs.has(i.src));
+          s.publishedImages = s.publishedImages.filter(i => {
+            if (i.actoId !== editingActoId) return true;
+            // Resolver src original: por índice (nuevo formato) o por src directo (legacy)
+            const originalSrc = i.imageIndex !== undefined
+              ? (oldActo?.images?.[i.imageIndex])
+              : i.src;
+            return originalSrc !== undefined && newSrcs.has(originalSrc);
+          });
       });
       state.actos[idx] = { id: editingActoId, ...obj };
     }
@@ -3446,6 +3973,7 @@ function saveActo() {
   }
   saveState();
   closeModal('modal-acto');
+  clearRuntimeModalDraft('acto');
   renderActoList();
   showToast('Acto guardado', 'success');
   if (_editSessionId) renderSessionEditView();
@@ -3542,13 +4070,17 @@ function removeActoImage(idx) {
 }
 
 // Publica una imagen concreta de un acto en la galería del diario de la sesión.
-// Si ya existía una entrada con el mismo src y actoId, la elimina antes de insertar.
+// Guarda una referencia ligera (actoId + imageIndex) en lugar de duplicar el base64.
 function publishActoImage(session, acto, clone, imgSrc) {
-  const src = imgSrc || acto.images?.[0] || acto.image;
-  if (!src) return;
+  const actoImages = acto.images?.length ? acto.images : (acto.image ? [acto.image] : []);
+  const imageIndex = actoImages.indexOf(imgSrc);
+  if (imageIndex === -1) return;
   if (!session.publishedImages) session.publishedImages = [];
-  session.publishedImages = session.publishedImages.filter(i => !(i.actoId === acto.id && i.src === src));
-  session.publishedImages.push({ id: uid(), actoId: acto.id, src, caption: acto.title });
+  // Eliminar entrada previa para la misma imagen del mismo acto
+  session.publishedImages = session.publishedImages.filter(i =>
+    !(i.actoId === acto.id && (i.imageIndex === imageIndex || i.src === imgSrc))
+  );
+  session.publishedImages.push({ id: uid(), actoId: acto.id, imageIndex, caption: acto.title });
   saveState();
   renderSessionGallery(session, clone);
   showToast('Imagen publicada en el diario', 'success');
@@ -3565,13 +4097,21 @@ function renderSessionGallery(session, clone) {
   wrap.style.display = '';
   grid.innerHTML = '';
   imgs.forEach(entry => {
+    // Resolver src: nueva referencia por índice o legacy con src directo
+    let resolvedSrc = entry.src;
+    if (entry.imageIndex !== undefined) {
+      const acto = (state.actos || []).find(a => a.id === entry.actoId);
+      const actoImages = acto?.images?.length ? acto.images : (acto?.image ? [acto.image] : []);
+      resolvedSrc = actoImages[entry.imageIndex];
+    }
+    if (!resolvedSrc) return; // entrada inválida (acto borrado o índice fuera de rango)
     const item = document.createElement('div');
     item.className = 'diary-gallery-item';
     const imgEl = document.createElement('img');
-    imgEl.src = entry.src; imgEl.alt = entry.caption || '';
+    imgEl.src = resolvedSrc; imgEl.alt = entry.caption || '';
     imgEl.className = 'diary-gallery-img';
     imgEl.title = entry.caption || '';
-    imgEl.addEventListener('click', () => openGalleryLightbox(entry.src, entry.caption));
+    imgEl.addEventListener('click', () => openGalleryLightbox(resolvedSrc, entry.caption));
     item.appendChild(imgEl);
     if (entry.caption) {
       const cap = document.createElement('div');
@@ -3612,6 +4152,30 @@ function openGalleryLightbox(src, caption) {
   overlay.style.display = 'flex';
 }
 
+function getTreeViewUIState(container) {
+  if (!container) return null;
+  return {
+    scrollTop: container.scrollTop,
+    collapsedKeys: Array.from(container.querySelectorAll('.tree-children.collapsed'))
+      .map(node => node.closest('[data-tree-key]')?.dataset.treeKey)
+      .filter(Boolean)
+  };
+}
+
+function restoreTreeViewUIState(container, uiState) {
+  if (!container || !uiState) return;
+  if (Number.isFinite(uiState.scrollTop)) container.scrollTop = uiState.scrollTop;
+  (uiState.collapsedKeys || []).forEach(treeKey => {
+    const treeNode = container.querySelector(`[data-tree-key="${treeKey}"]`);
+    if (!treeNode) return;
+    const childWrap = treeNode.querySelector('.tree-children');
+    const toggle = treeNode.querySelector('.tree-toggle');
+    if (!childWrap || !toggle) return;
+    childWrap.classList.add('collapsed');
+    toggle.textContent = '▸';
+  });
+}
+
 // ===========================
 //  EVENTOS ALEATORIOS
 //  Los eventos se anidan bajo Sesión > Acto en un árbol colapsable.
@@ -3625,6 +4189,7 @@ const EVENTO_CAT_COLORS = { Tensión:'#c86e1e', Combate:'#a02020', Social:'#3ca0
 function renderEventoList() {
   const list = document.getElementById('evento-list');
   if (!list) return;
+  const treeViewUIState = getTreeViewUIState(list);
   list.innerHTML = '';
   if (state.eventos.length === 0) {
     list.innerHTML = '<div class="empty-state">No hay eventos aleatorios definidos.</div>';
@@ -3640,6 +4205,7 @@ function renderEventoList() {
 
     const sessionNode = document.createElement('div');
     sessionNode.className = 'tree-session';
+  sessionNode.dataset.treeKey = `session:${sid}`;
     const sessionHeader = document.createElement('div');
     sessionHeader.className = 'tree-session-header';
     sessionHeader.innerHTML = `<span class="tree-toggle">▾</span><span class="tree-session-name">${session ? session.name : sid}</span><span class="tree-count">${sessionEventos.length} evento${sessionEventos.length !== 1 ? 's' : ''}</span>`;
@@ -3659,6 +4225,7 @@ function renderEventoList() {
 
       const actoNode = document.createElement('div');
       actoNode.className = 'tree-acto';
+  actoNode.dataset.treeKey = `session:${sid}:acto:${aid}`;
       const actoHeader = document.createElement('div');
       actoHeader.className = 'tree-acto-header';
       actoHeader.innerHTML = `<span class="tree-toggle">▾</span><span class="tree-acto-name">${acto ? acto.title : '— Sin acto —'}</span><span class="tree-count">${actoEventos.length}</span>`;
@@ -3693,9 +4260,13 @@ function renderEventoList() {
     sessionNode.appendChild(sessionChildren);
     list.appendChild(sessionNode);
   });
+
+  restoreTreeViewUIState(list, treeViewUIState);
 }
 
 function openEventoModal(id, preSessionId, preActoId) {
+  const draft = getRuntimeModalDraft('evento');
+  const shouldRestoreDraft = draft && draft.targetId === (id || null);
   editingEventoId = id || null;
   const e = id ? state.eventos.find(x => x.id === id) : null;
   document.getElementById('modal-evento-title').textContent = id ? 'Editar Evento' : 'Nuevo Evento Aleatorio';
@@ -3705,18 +4276,18 @@ function openEventoModal(id, preSessionId, preActoId) {
   state.sessions.forEach(s => {
     const o = document.createElement('option');
     o.value = s.id; o.textContent = s.name;
-    const selId = e ? e.sessionId : preSessionId;
+    const selId = shouldRestoreDraft ? (draft.sessionId || preSessionId) : (e ? e.sessionId : preSessionId);
     if (selId === s.id) o.selected = true;
     sSel.appendChild(o);
   });
   // Populate acto dropdown
-  const resolvedSessionId = e ? e.sessionId : preSessionId;
-  const resolvedActoId    = e ? e.actoId    : preActoId;
+  const resolvedSessionId = shouldRestoreDraft ? (draft.sessionId || preSessionId) : (e ? e.sessionId : preSessionId);
+  const resolvedActoId    = shouldRestoreDraft ? (draft.actoId || preActoId) : (e ? e.actoId    : preActoId);
   populateEventoActos(resolvedSessionId, resolvedActoId);
-  document.getElementById('ef2-cat').value = e ? e.categoria : 'Tensión';
-  document.getElementById('ef2-title').value = e ? e.title : '';
-  document.getElementById('ef2-public').value = e ? (e.public || '') : '';
-  document.getElementById('ef2-private').value = e ? (e.private || '') : '';
+  document.getElementById('ef2-cat').value = shouldRestoreDraft ? (draft.categoria || 'Tensión') : (e ? e.categoria : 'Tensión');
+  document.getElementById('ef2-title').value = shouldRestoreDraft ? (draft.title || '') : (e ? e.title : '');
+  document.getElementById('ef2-public').value = shouldRestoreDraft ? (draft.public || '') : (e ? (e.public || '') : '');
+  document.getElementById('ef2-private').value = shouldRestoreDraft ? (draft.private || '') : (e ? (e.private || '') : '');
   openModal('modal-evento');
 }
 
@@ -3760,6 +4331,7 @@ function saveEvento() {
   }
   saveState();
   closeModal('modal-evento');
+  clearRuntimeModalDraft('evento');
   renderEventoList();
   showToast('Evento guardado', 'success');
   if (_editSessionId) renderSessionEditView();
@@ -3882,21 +4454,29 @@ function populateCharPlayerSelect(char) {
 function openCharModal(id) {
   // Players can only edit their own character
   if (!isDM() && id && getLinkedCharIdForUser(currentUser?.id) !== id) return;
+  const draft = getRuntimeModalDraft('char');
+  const shouldRestoreDraft = draft && draft.targetId === (id || null);
   editingCharId = id||null;
   charSkillState={}; charWeaponSkillState={}; charHabState={}; currentArmorSel='';
   document.getElementById('modal-char-title').textContent = id ? 'Editar Personaje' : 'Nuevo Personaje';
   const char = id ? state.chars.find(c=>c.id===id) : null;
+  const fieldSource = shouldRestoreDraft ? (draft.fields || {}) : {};
   ['name','class','race','align','height','age','pv','pm','gold','skillpts','backpack','notes'].forEach(f=>{
-    const el=document.getElementById('cf-'+f); if(el) el.value = char?(char[f]||''):'';
+    const el=document.getElementById('cf-'+f); if(el) el.value = fieldSource[f] ?? (char?(char[f]||''):'');
   });
   populateCharPlayerSelect(char);
+  const playerSelect = document.getElementById('cf-player');
+  if (playerSelect) playerSelect.value = fieldSource.player ?? (char?.userId || '');
   ['fue','int','car','des','vida'].forEach(a=>{
-    const el=document.getElementById('cf-'+a); if(el){el.value=char?(char[a]||10):10;}
+    const el=document.getElementById('cf-'+a); if(el){el.value=fieldSource[a] ?? (char?(char[a]||10):10);}
   });
-  if(char){ charSkillState=Object.assign({},char.skills||{}); charWeaponSkillState=Object.assign({},char.weaponSkills||{}); currentArmorSel=char.armor||''; }
+  if(shouldRestoreDraft){
+    charSkillState=Object.assign({},draft.skills||{}); charWeaponSkillState=Object.assign({},draft.weaponSkills||{}); currentArmorSel=draft.armor||'';
+  } else if(char){ charSkillState=Object.assign({},char.skills||{}); charWeaponSkillState=Object.assign({},char.weaponSkills||{}); currentArmorSel=char.armor||''; }
   ['L','M','P'].forEach(t=>document.getElementById('armor-'+t).classList.toggle('sel',currentArmorSel===t));
   const habsList=document.getElementById('cf-habs-list'); habsList.innerHTML='';
-  if(char&&char.habs) char.habs.forEach(h=>{
+  const habSource = shouldRestoreDraft ? (draft.habs || []) : (char&&char.habs ? char.habs : []);
+  habSource.forEach(h=>{
     const habId = 'hab-' + uid();
     const row=document.createElement('div'); row.className='hab-row'; row.dataset.habId = habId;
     const level = h.level||0;
@@ -3966,6 +4546,7 @@ function saveChar() {
   else state.chars.push(char);
   saveState();
   closeModal('modal-char');
+  clearRuntimeModalDraft('char');
   renderCharList();
   showToast('Personaje guardado', 'success');
   // If player updated their own char, refresh charsheet view
@@ -4038,12 +4619,15 @@ function refreshCombatantSelects() {
 // ===========================
 function openEnemyModal(id) {
   if(!isDM()) return;
+  const draft = getRuntimeModalDraft('enemy');
+  const shouldRestoreDraft = draft && draft.targetId === (id || null);
   editingEnemyId=id||null; currentEnemyArmorSel='';
   document.getElementById('modal-enemy-title').textContent=id?'Editar Enemigo':'Nuevo Tipo de Enemigo';
   const e=id?state.enemies.find(x=>x.id===id):null;
-  ['name','attacks','notes'].forEach(f=>{const el=document.getElementById('ef-'+f);if(el)el.value=e?(e[f]||''):''});
-  ['pv','fue','int','car','des'].forEach(f=>{const el=document.getElementById('ef-'+f);if(el)el.value=e?(e[f]||10):10});
-  currentEnemyArmorSel=e?(e.armor||''):'';
+  const fieldSource = shouldRestoreDraft ? (draft.fields || {}) : {};
+  ['name','attacks','notes'].forEach(f=>{const el=document.getElementById('ef-'+f);if(el)el.value=fieldSource[f] ?? (e?(e[f]||''):'')});
+  ['pv','fue','int','car','des'].forEach(f=>{const el=document.getElementById('ef-'+f);if(el)el.value=fieldSource[f] ?? (e?(e[f]||10):10)});
+  currentEnemyArmorSel=shouldRestoreDraft ? (draft.armor || '') : (e?(e.armor||''):'' );
   ['L','M','P'].forEach(t=>document.getElementById('ef-armor-'+t).classList.toggle('sel',currentEnemyArmorSel===t));
   openModal('modal-enemy');
 }
@@ -4063,7 +4647,8 @@ function saveEnemy() {
   };
   if(editingEnemyId){const idx=state.enemies.findIndex(e=>e.id===editingEnemyId);state.enemies[idx]=enemy;}
   else state.enemies.push(enemy);
-  saveState(); closeModal('modal-enemy'); renderEnemyList();
+  saveState(); closeModal('modal-enemy');
+  clearRuntimeModalDraft('enemy'); renderEnemyList();
   showToast('Enemigo guardado', 'success');
 }
 function renderEnemyList() {
@@ -4259,6 +4844,8 @@ function populateCampaignDmSelect(selectedUserId = '') {
 
 function openCampaignModal(campaignId = null, options = {}) {
   const mode = options.mode || 'maintenance';
+  const draft = getRuntimeModalDraft('campaign');
+  const shouldRestoreDraft = draft && draft.targetId === (campaignId || null) && draft.mode === mode;
   campaignModalMode = mode;
   if (mode === 'maintenance' && !campaignId && !isGenericDMUser(currentUser)) return;
   if (campaignId && !canManageCampaign(campaignId)) return;
@@ -4272,13 +4859,15 @@ function openCampaignModal(campaignId = null, options = {}) {
     ? 'Preparar'
     : (campaign ? 'Guardar' : 'Crear');
   document.getElementById('camp-name').value = creatingFromLogin
-    ? (pendingLoginCampaignDraft?.name || '')
-    : (campaign?.name || '');
+    ? (pendingLoginCampaignDraft?.name || draft?.name || '')
+    : (shouldRestoreDraft ? (draft.name || '') : (campaign?.name || ''));
   document.getElementById('camp-clone-current').checked = false;
   document.getElementById('camp-clone-current').disabled = !!campaign || creatingFromLogin;
   document.getElementById('camp-dm-user-wrap').style.display = creatingFromLogin ? 'none' : '';
   document.getElementById('camp-clone-current-wrap').style.display = creatingFromLogin ? 'none' : 'flex';
-  populateCampaignDmSelect(campaign?.dmUserId || '');
+  populateCampaignDmSelect(shouldRestoreDraft ? (draft.dmUserId || '') : (campaign?.dmUserId || ''));
+  const cloneCurrentEl = document.getElementById('camp-clone-current');
+  if (cloneCurrentEl && shouldRestoreDraft) cloneCurrentEl.checked = !!draft.cloneCurrent;
   document.getElementById('modal-campaign-error').textContent = '';
   openModal('modal-campaign');
 }
@@ -4316,6 +4905,8 @@ async function saveCampaign() {
   }
   await saveCampaignCatalog();
 
+  closeModal('modal-campaign');
+  clearRuntimeModalDraft('campaign');
   renderCampaignSelect();
   renderCampaignList();
   renderUserList();
@@ -4376,27 +4967,37 @@ function deleteCampaign(campaignId) {
 async function switchToCampaign(campaignId) {
   const campaign = campaigns.find(c => c.id === campaignId);
   if (!campaign) return;
-  if (campaign.archived && !canManageCampaign(campaignId)) return;
+  clearPendingRealtimeState();
+  runtimeModalDrafts = {};
   if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
   sessionStorage.setItem('ljhd_campaign', campaignId);
-  sessionStorage.removeItem('ljhd_user');
-  currentUser = null;
-  state = emptyState();
+  currentCampaignId = campaignId;
   document.querySelectorAll('#main-content .view[data-session-id]').forEach(v => v.remove());
   await loadState(campaignId);
   renderCampaignSelect();
-  document.getElementById('login-user').value = '';
-  document.getElementById('login-pass').value = '';
-  document.getElementById('login-error').textContent = '';
-  document.getElementById('login-screen').classList.remove('hidden');
-  showToast('Selecciona un usuario para entrar en la campaña', 'info');
+  renderHeaderCampaignSelect();
+  rebuildSessionTabs();
+  renderCharList();
+  renderEnemyList();
+  if (currentUser) {
+    renderUserList();
+    renderCampaignList();
+  }
+  applyRoleUI();
+  switchView('landing');
+  startRealtimeSync();
+  showToast(`Campaña cambiada a "${getCurrentCampaignName()}"`, 'info');
 }
 
 // ===========================
 //  MODALS
 // ===========================
 function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) {
+  captureRuntimeModalDraft(id);
+  document.getElementById(id).classList.remove('open');
+  schedulePendingRealtimeFlush();
+}
 function closeOpenSessionPopups() {
   let closedAny = false;
   document.querySelectorAll('.session-popup').forEach(popup => {
@@ -4405,6 +5006,7 @@ function closeOpenSessionPopups() {
     popup.closest('.view')?.querySelectorAll('.tool-popup-btn.active').forEach(btn => btn.classList.remove('active'));
     closedAny = true;
   });
+  if (closedAny) schedulePendingRealtimeFlush();
   return closedAny;
 }
 function closeTextInputModal() {
@@ -4419,10 +5021,13 @@ function openTextInputModal({ title, label, placeholder, submitLabel, initialVal
   const submitEl = document.getElementById('modal-text-input-submit');
   if (!titleEl || !labelEl || !fieldEl || !errorEl || !submitEl) return;
 
+  const signature = [title || '', label || '', placeholder || '', submitLabel || ''].join('\u0000');
+  const draft = getRuntimeModalDraft('text-input');
   titleEl.textContent = title || 'Nuevo nombre';
   labelEl.textContent = label || 'Nombre';
   fieldEl.placeholder = placeholder || '';
-  fieldEl.value = initialValue || '';
+  fieldEl.dataset.signature = signature;
+  fieldEl.value = draft?.signature === signature ? (draft.value || initialValue || '') : (initialValue || '');
   submitEl.textContent = submitLabel || 'Guardar';
   errorEl.textContent = '';
 
@@ -4432,6 +5037,7 @@ function openTextInputModal({ title, label, placeholder, submitLabel, initialVal
       errorEl.textContent = maybeError;
       return;
     }
+    clearRuntimeModalDraft('text-input');
     closeTextInputModal();
   };
 
@@ -4451,7 +5057,12 @@ window.openModal = openModal;
 window.closeModal = closeModal;
 window.closeTextInputModal = closeTextInputModal;
 document.querySelectorAll('.modal-overlay').forEach(overlay=>{
-  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.classList.remove('open'); });
+  overlay.addEventListener('click', e=>{
+    if(e.target===overlay) {
+      overlay.classList.remove('open');
+      schedulePendingRealtimeFlush();
+    }
+  });
 });
 // Enter key in login
 document.getElementById('login-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
@@ -4464,9 +5075,15 @@ document.addEventListener('keydown', e=>{
       return;
     }
     const open = document.querySelector('.modal-overlay.open');
-    if(open) open.classList.remove('open');
+    if(open) {
+      open.classList.remove('open');
+      schedulePendingRealtimeFlush();
+    }
     hideEnemyTooltip();
   }
+});
+document.addEventListener('focusout', () => {
+  schedulePendingRealtimeFlush();
 });
 // Click outside enemy tooltip hides it
 document.addEventListener('click', e=>{
@@ -4627,6 +5244,7 @@ paintStaticIcons();
   await migrateLegacyUsersToGlobal();
   await migrateCampaignDirectorsFromLegacyUsers();
   renderCampaignSelect();
+  renderHeaderCampaignSelect();
   applyDeskSubtitle();
 
   const campaignSelect = document.getElementById('login-campaign');
@@ -4653,18 +5271,29 @@ paintStaticIcons();
     }
   }
 
+  const headerCampaign = document.getElementById('header-campaign');
+  if (headerCampaign) {
+    headerCampaign.addEventListener('change', async () => {
+      const selected = headerCampaign.value;
+      if (!selected || selected === currentCampaignId) return;
+      await switchToCampaign(selected);
+    });
+  }
+
   // Restore session after page refresh
   const savedCampaign = sessionStorage.getItem('ljhd_campaign');
   const savedId = sessionStorage.getItem('ljhd_user');
-  if (savedCampaign && campaigns.some(c => c.id === savedCampaign && !c.archived)) {
+  if (savedCampaign && campaigns.some(c => c.id === savedCampaign)) {
     await loadState(savedCampaign);
     if (campaignSelect) campaignSelect.value = savedCampaign;
+    renderHeaderCampaignSelect();
   }
   if (savedCampaign && savedId) {
     const user = globalUsers.find(u => u.id === savedId);
     if (user) {
       currentUser = user;
       applyRoleUI();
+      renderHeaderCampaignSelect();
       rebuildSessionTabs();
       renderCharList();
       renderEnemyList();
@@ -4680,6 +5309,7 @@ paintStaticIcons();
     }
   }
   renderCampaignList();
+  renderHeaderCampaignSelect();
 })();
 
 // Búsqueda en tiempo real en las listas de mantenimiento.
